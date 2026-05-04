@@ -31,14 +31,24 @@ function ensureDir() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
+const SKILL_SOURCE = 'ocean-chat';
+
 function saveCredentials(agentId, apiKey, openid) {
   ensureDir();
-  fs.writeFileSync(CRED_FILE, JSON.stringify({ agent_id: agentId, api_key: apiKey, openid }, null, 2));
+  fs.writeFileSync(CRED_FILE, JSON.stringify({
+    agent_id: agentId, api_key: apiKey, openid: openid,
+    source: SKILL_SOURCE, created_at: new Date().toISOString()
+  }, null, 2));
 }
 
 function loadCredentials() {
   if (!fs.existsSync(CRED_FILE)) return null;
-  return JSON.parse(fs.readFileSync(CRED_FILE, 'utf-8'));
+  try {
+    const data = JSON.parse(fs.readFileSync(CRED_FILE, 'utf-8'));
+    // Ignore credentials created by other skills (e.g. captain-lobster)
+    if (data.source && data.source !== SKILL_SOURCE) return null;
+    return data;
+  } catch (_) { return null; }
 }
 
 function loadContacts() {
