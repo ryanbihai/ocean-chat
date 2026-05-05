@@ -1,6 +1,6 @@
 name: ocean-agent
 title: Ocean Agent — 保险代理人 AI 工作台
-version: 1.0.0
+version: 1.0.1
 runtime: node
 entry: scripts/listen.js
 min_openclaw_version: "2026.1.0"

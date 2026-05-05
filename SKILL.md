@@ -1,7 +1,7 @@
 ---
 name: ocean-agent
-description: AI workbench for insurance agents — OceanBus Yellow Pages lead generation, customer intake, follow-up reminders, meeting negotiation, and reputation management. Based on OceanBus SDK, zero server deployment.
-version: 1.0.0
+description: OceanBus-powered AI workbench for insurance agents. Use when agents need Yellow Pages lead generation, customer intake and triage, follow-up reminders with draft messages, A2A meeting negotiation, and OceanBus reputation management. Zero server deployment. npm install oceanbus.
+version: 1.0.1
 metadata:
   openclaw:
     requires:
