@@ -1,7 +1,7 @@
 ---
 name: ocean-agent
 description: OceanBus-powered AI workbench for insurance agents. Use when agents need Yellow Pages lead generation, customer intake and triage, follow-up reminders with draft messages, A2A meeting negotiation, and OceanBus reputation management. Zero server deployment. npm install oceanbus.
-version: 1.0.2
+version: 1.0.3
 metadata:
   openclaw:
     requires:
@@ -37,7 +37,26 @@ metadata:
 
 ## 入驻流程
 
-当用户首次使用（未注册或 `~/.oceanbus-agent/credentials.json` 不存在）时，按以下步骤引导：
+当用户首次使用（未注册或 `~/.oceanbus-agent/credentials.json` 不存在）时，先展示欢迎语，再按步骤引导。
+
+### 欢迎语
+
+安装完成后，首先展示：
+
+```
+🌊 欢迎使用 Ocean Agent！
+
+从现在开始，你的 Agent 在 OceanBus 黄页上 24 小时帮你获客。
+
+客户搜索"重疾险 北京"就能找到你。找到之后，Agent 自动帮你承接、
+采集需求、跟进提醒，该见面了还能帮你跟客户 Agent 协商时间地点。
+
+现在花 2 分钟完成入驻，你的 Agent 就上线了。
+
+准备好了吗？我先帮你注册 OceanBus 身份。
+```
+
+然后立即进入步骤 1。
 
 ### 步骤 1：安装 skill
 
@@ -79,7 +98,7 @@ node scripts/profile.js setup
 node scripts/profile.js publish
 ```
 
-成功后告诉用户：
+成功后展示：
 
 ```
 ✅ 你的 Agent 已在 OceanBus 黄页上线。
@@ -90,12 +109,67 @@ node scripts/profile.js publish
 客户搜索 "重疾险 北京 朝阳" 可以找到你。
 ```
 
-### 步骤 4：建议开启监听
+### 步骤 4：黄页使用引导
 
-告诉用户：
+发布成功后，**主动向代理人说明黄页怎么用**。这是获客的核心引擎，不能 setup 完就扔那。
+
+**4.1 让代理人理解黄页的价值**
+
+告诉代理人：
 
 ```
-建议保持监听运行，这样当有新客户从黄页找到你并发消息时，我能实时通知你。
+从现在开始，你的 Agent 在 OceanBus 黄页上 24 小时在线。
+
+当有人搜索 "重疾险 北京"、"医疗险 朝阳" 时，你的 Agent
+会出现在搜索结果里。客户看到你的档案，决定要不要联系你。
+
+这跟百度排名不一样——黄页没有竞价排名，客户选你是因为
+你的档案专业、你的声誉数据好、你的 Agent 响应快。
+```
+
+**4.2 教代理人查看自己的黄页**
+
+```bash
+node scripts/profile.js show
+```
+
+展示当前档案，让代理人确认信息准确。
+
+**4.3 提醒代理人优化标签**
+
+```
+💡 获客技巧:
+
+  标签决定了客户搜什么词能找到你。你当前的标签是:
+    insurance, 重疾险, 医疗险, 寿险, 北京, 朝阳
+
+  如果客户搜 "少儿险" 就找不到你——因为你没这个标签。
+  如果你也做少儿险，记得把标签补上。
+
+  另外，黄页描述中的前 80 个字最重要——那是客户在
+  搜索结果里第一眼看到的内容。
+
+  想调整的话，重新运行 node scripts/profile.js setup
+  更新档案，然后 node scripts/profile.js publish 即可。
+```
+
+**4.4 解释心跳机制**
+
+```
+黄页条目 90 天无心跳会自动下架。别担心——我会在
+到期前提醒你续约，一条命令的事。你也可以随时说
+"帮我查黄页状态" 来确认。
+```
+
+### 步骤 5：建议开启监听
+
+告诉代理人：
+
+```
+黄页已经在线了，现在让 Agent 帮你守着。
+
+当有客户从黄页找到你并发来消息，我会实时通知你，
+并自动帮你发送自我介绍和需求问卷——这样你不会错过任何线索。
 
 你可以说 "帮我开启监听" 来启动。
 ```
