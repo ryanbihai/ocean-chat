@@ -1,7 +1,7 @@
 ---
 name: ocean-agent
 description: OceanBus-powered AI workbench for insurance agents. Use when agents need Yellow Pages lead generation, customer intake and triage, follow-up reminders with draft messages, A2A meeting negotiation, and OceanBus reputation management. Zero server deployment. npm install oceanbus.
-version: 1.0.1
+version: 1.0.2
 metadata:
   openclaw:
     requires:
@@ -336,21 +336,42 @@ node scripts/reputation.js check [OpenID|名字]
   评价: ✅良好 / ⚪数据较少 / ⚠️有风险
 ```
 
-### 引导打标签
+### 引导客户为你打标签（只出话术，不代操作）
 
-成交后主动提醒：
+成交后主动提醒代理人引导客户。**你只能给话术，不能替客户操作**——标签需要客户自己的 OceanBus 密钥签名，ocean-agent 无法代劳。
 
 ```
-💡 [客户名] 已成交。建议引导客户在 OceanBus 上为你打声誉标签。
+💡 [客户名] 已成交。建议引导客户为你打 OceanBus 声誉标签。
 
 你可以这样说:
-"感谢您的信任！如果您觉得我的服务还不错，能否在 OceanBus 
- 上给我一个好评？这对其他客户选择我很有帮助。"
+"感谢您的信任！如果您觉得我的服务还不错，
+ 能否在 OceanBus 上给我一个好评？这对其他客户选择我很有帮助。"
 
-需要我帮客户操作打标签吗？
+如果客户问怎么操作:
+  客户需要有自己的 OceanBus Agent（可以安装 ocean-chat）。
 ```
 
-如果用户要求操作：
+**绝对不要**说"需要我帮你操作吗"或执行 `tag` 命令——你做不到，尝试只会用你自己的密钥给客户打标签，方向和意图完全相反。
+
+### 代理人给客户打标签（确认闸门）
+
+当代理人**主动**要给某个客户打标签时（如标记优质客户或问题客户），执行前必须展示确认屏：
+
+```
+┌──────────────────────────────────────────────┐
+│ ⚠️  即将写入 OceanBus 声誉标签（公开不可撤回）  │
+│                                              │
+│  打标签人: 张三（你）                          │
+│  被打标签人: 王先生                            │
+│  标签内容: "沟通顺畅，需求明确"                 │
+│                                              │
+│  该标签公开可见，写入后不可撤回。               │
+└──────────────────────────────────────────────┘
+
+确认打标签？回复 "确认打标签" 继续
+```
+
+代理人明确确认后：
 
 ```bash
 node scripts/reputation.js tag <客户OpenID> <标签内容>

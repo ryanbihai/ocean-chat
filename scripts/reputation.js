@@ -143,7 +143,7 @@ async function cmdCheck(target) {
 async function cmdTag(target, text) {
   if (!target || !text) {
     console.log('用法: node scripts/reputation.js tag <名字|OpenID> <标签内容>');
-    console.log('例如: node scripts/reputation.js tag 张三 "专业耐心，方案讲解清晰"');
+    console.log('例如: node scripts/reputation.js tag 张三 "沟通顺畅，需求明确"');
     return;
   }
 
@@ -154,6 +154,36 @@ async function cmdTag(target, text) {
   const entry = contacts[target];
   const contactOpenid = (entry && typeof entry === 'object') ? entry.openid : (entry || target);
   const displayName = entry ? target : shortId(target);
+
+  // ── Confirmation gate ──────────────────────────────────────────────────
+  console.log('\n┌──────────────────────────────────────────────┐');
+  console.log('│ ⚠️  即将写入 OceanBus 声誉标签（公开不可撤回）  │');
+  console.log('├──────────────────────────────────────────────┤');
+  console.log('│                                              │');
+  console.log('│  打标签人: ' + creds.openid.slice(0, 20) + '...(你)  '.padEnd(46) + '│');
+  console.log('│  被打标签人: ' + displayName.padEnd(34) + '│');
+  console.log('│  标签内容: ' + text.padEnd(34) + '│');
+  console.log('│                                              │');
+  console.log('│  该标签将:                                     │');
+  console.log('│  · 公开可见，所有 OceanBus Agent 可查到         │');
+  console.log('│  · 以你的 Ed25519 密钥签名，不可抵赖            │');
+  console.log('│  · 写入后不可撤回                              │');
+  console.log('│                                              │');
+  console.log('└──────────────────────────────────────────────┘');
+  console.log('');
+  console.log('确认打标签？输入 yes 继续，其他任意键取消:');
+
+  const readline = require('readline');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise(resolve => {
+    rl.question('> ', ans => { rl.close(); resolve(ans.trim()); });
+  });
+
+  if (answer !== 'yes') {
+    console.log('已取消。');
+    return;
+  }
+  // ── End confirmation gate ──────────────────────────────────────────────
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
