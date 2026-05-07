@@ -1,6 +1,6 @@
 {
   "name": "ocean-agent",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "保险代理人 AI 工作台 — 黄页获客、线索承接、声誉积累、跟进管理",
   "main": "scripts/listen.js",
@@ -24,6 +24,6 @@
   ],
   "license": "MIT-0",
   "dependencies": {
-    "oceanbus": "^0.2.1"
+    "oceanbus": "^0.4.0"
   }
 }

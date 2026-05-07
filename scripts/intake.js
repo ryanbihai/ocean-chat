@@ -10,7 +10,7 @@
 //   node scripts/intake.js note <oid> <text>   添加客户备注
 //   node scripts/intake.js summary             线索管道总览
 
-const { createOceanBus } = require('oceanbus');
+const { createOceanBus, RosterService } = require('oceanbus');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -18,13 +18,59 @@ const os = require('os');
 // ── Config ────────────────────────────────────────────────────────────────
 const DATA_DIR = path.join(os.homedir(), '.oceanbus-agent');
 const CRED_FILE = path.join(DATA_DIR, 'credentials.json');
-const CONTACTS_FILE = path.join(DATA_DIR, 'contacts.json');
 const CURSOR_FILE = path.join(DATA_DIR, 'cursor.json');
+const LEGACY_CONTACTS_FILE = path.join(DATA_DIR, 'contacts.json');
 
 const SKILL_SOURCE = 'ocean-agent';
+const APP_NAME = 'ocean-agent';
 
 // Pipeline stages
 const STAGES = ['新线索', '需求采集中', '方案已发', '待成交', '已成交', '已流失'];
+
+// ── Roster ─────────────────────────────────────────────────────────────────
+
+let _roster = null;
+function getRoster() {
+  if (!_roster) _roster = new RosterService();
+  return _roster;
+}
+
+/** Migrate old contacts.json to Roster (one-time) */
+async function migrateContacts() {
+  if (!fs.existsSync(LEGACY_CONTACTS_FILE)) return;
+  try {
+    const oldContacts = JSON.parse(fs.readFileSync(LEGACY_CONTACTS_FILE, 'utf-8'));
+    const roster = getRoster();
+
+    for (const [name, info] of Object.entries(oldContacts)) {
+      const data = typeof info === 'string' ? { openid: info } : info;
+      const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9一-鿿\-_]/g, '');
+      const existing = await roster.get(slug);
+      if (existing) continue;
+
+      await roster.add({
+        name,
+        id: slug,
+        agents: [{ agentId: '', openId: data.openid, purpose: '客户', isDefault: true }],
+        tags: [],
+        aliases: [],
+        notes: '',
+        source: 'chat',
+      });
+
+      // Migrate app data
+      const appData = {
+        stage: data.stage || '新线索',
+        preferences: data.preferences || {},
+        history: data.notes || [],
+        last_contact: data.last_contact || null,
+      };
+      await roster.updateAppData(slug, APP_NAME, appData);
+    }
+
+    fs.renameSync(LEGACY_CONTACTS_FILE, LEGACY_CONTACTS_FILE + '.migrated');
+  } catch (_) { /* silently skip */ }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -39,17 +85,6 @@ function loadCredentials() {
   } catch (_) { return null; }
 }
 
-function loadContacts() {
-  ensureDir();
-  if (!fs.existsSync(CONTACTS_FILE)) return {};
-  try { return JSON.parse(fs.readFileSync(CONTACTS_FILE, 'utf-8')); } catch (_) { return {}; }
-}
-
-function saveContacts(contacts) {
-  ensureDir();
-  fs.writeFileSync(CONTACTS_FILE, JSON.stringify(contacts, null, 2));
-}
-
 function loadCursor() {
   if (!fs.existsSync(CURSOR_FILE)) return 0;
   try { return JSON.parse(fs.readFileSync(CURSOR_FILE, 'utf-8')).last_seq || 0; } catch (_) { return 0; }
@@ -58,25 +93,6 @@ function loadCursor() {
 function saveCursor(seq) {
   ensureDir();
   fs.writeFileSync(CURSOR_FILE, JSON.stringify({ last_seq: seq }));
-}
-
-function resolveName(openid, contacts) {
-  for (const [name, info] of Object.entries(contacts)) {
-    const id = typeof info === 'string' ? info : info.openid;
-    if (id === openid) return name;
-  }
-  return null;
-}
-
-function findContact(query, contacts) {
-  // Search by name or OpenID (partial match)
-  for (const [name, info] of Object.entries(contacts)) {
-    const id = typeof info === 'string' ? info : info.openid;
-    if (name === query || id === query || id.startsWith(query) || name.includes(query)) {
-      return { name, info: typeof info === 'string' ? { openid: info } : info };
-    }
-  }
-  return null;
 }
 
 function shortId(openid) {
@@ -94,14 +110,45 @@ function daysAgo(iso) {
   } catch (_) { return '?'; }
 }
 
+/** Get app data for a contact, defaults to empty */
+function appData(contact) {
+  return contact?.apps?.[APP_NAME] || {};
+}
+
+/** Find a full Contact by name or OpenID using Roster */
+async function findContact(query) {
+  const roster = getRoster();
+
+  // Try exact id match first
+  let contact = await roster.get(query);
+  if (contact) return contact;
+
+  // Try by OpenID
+  contact = await roster.findByOpenId(query);
+  if (contact) return contact;
+
+  // Fallback: search (returns MatchEntry[]), then load full Contact
+  const result = await roster.search(query);
+  if (result.exact.length >= 1) {
+    return await roster.get(result.exact[0].id);
+  }
+  if (result.fuzzy.length >= 1) {
+    return await roster.get(result.fuzzy[0].id);
+  }
+
+  return null;
+}
+
 // ── Commands ──────────────────────────────────────────────────────────────
 
 async function cmdCheck() {
   const creds = loadCredentials();
   if (!creds) { console.log('尚未注册。运行: node scripts/profile.js setup'); return; }
 
-  const contacts = loadContacts();
+  await migrateContacts();
+
   const lastSeq = loadCursor();
+  const roster = getRoster();
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
@@ -115,12 +162,11 @@ async function cmdCheck() {
   } else {
     let maxSeq = lastSeq;
     for (const msg of messages) {
-      const name = resolveName(msg.from_openid, contacts);
-      const from = name || shortId(msg.from_openid);
-      const isNew = !name;
+      const contact = await roster.findByOpenId(msg.from_openid);
+      const isNew = !contact;
 
       console.log('');
-      console.log((isNew ? '🆕 ' : '📩 ') + from + ' · ' + formatTime(msg.created_at));
+      console.log((isNew ? '🆕 ' : '📩 ') + (contact?.name || shortId(msg.from_openid)) + ' · ' + formatTime(msg.created_at));
       console.log('─'.repeat(50));
       console.log(msg.content);
       console.log('');
@@ -144,10 +190,12 @@ async function cmdReply(target, message) {
   const creds = loadCredentials();
   if (!creds) { console.log('尚未注册。运行: node scripts/profile.js setup'); return; }
 
-  const contacts = loadContacts();
-  const contact = findContact(target, contacts);
-  const openid = contact ? contact.info.openid : target;
-  const displayName = contact ? contact.name : shortId(target);
+  await migrateContacts();
+
+  const roster = getRoster();
+  const contact = await findContact(target);
+  const openid = contact?.agents[0]?.openId || target;
+  const displayName = contact?.name || shortId(target);
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
@@ -157,10 +205,12 @@ async function cmdReply(target, message) {
   await ob.send(openid, message);
   console.log('✅ 已发送 → ' + displayName);
 
-  // Update contact last_contact
-  if (contact && typeof contact.info === 'object') {
-    contact.info.last_contact = new Date().toISOString();
-    saveContacts(contacts);
+  // Update last contact timestamp in Roster
+  if (contact) {
+    const ad = appData(contact);
+    ad.last_contact = new Date().toISOString();
+    await roster.updateAppData(contact.id, APP_NAME, ad);
+    await roster.touch(contact.id);
   }
 
   await ob.destroy();
@@ -179,23 +229,21 @@ async function cmdClassify(target, stage) {
     return;
   }
 
-  const contacts = loadContacts();
-  const contact = findContact(target, contacts);
+  await migrateContacts();
+
+  const roster = getRoster();
+  const contact = await findContact(target);
 
   if (!contact) {
     console.log('未找到客户: ' + target);
     return;
   }
 
-  const oldStage = (typeof contact.info === 'object' ? contact.info.stage : null) || '未知';
+  const ad = appData(contact);
+  const oldStage = ad.stage || '未知';
+  ad.stage = stage;
+  await roster.updateAppData(contact.id, APP_NAME, ad);
 
-  if (typeof contact.info === 'string') {
-    contacts[contact.name] = { openid: contact.info, stage: stage };
-  } else {
-    contact.info.stage = stage;
-  }
-
-  saveContacts(contacts);
   console.log('✅ ' + contact.name + ': ' + oldStage + ' → ' + stage);
 }
 
@@ -205,36 +253,41 @@ async function cmdNote(target, text) {
     return;
   }
 
-  const contacts = loadContacts();
-  const contact = findContact(target, contacts);
+  await migrateContacts();
+
+  const roster = getRoster();
+  const contact = await findContact(target);
 
   if (!contact) {
     console.log('未找到客户: ' + target);
     return;
   }
 
-  if (typeof contact.info === 'string') {
-    contacts[contact.name] = { openid: contact.info, notes: [text] };
-  } else {
-    contact.info.notes = contact.info.notes || [];
-    contact.info.notes.push({ text, time: new Date().toISOString() });
-  }
+  const ad = appData(contact);
+  ad.history = ad.history || [];
+  ad.history.push({ text, time: new Date().toISOString() });
+  await roster.updateAppData(contact.id, APP_NAME, ad);
 
-  saveContacts(contacts);
   console.log('✅ 已为 ' + contact.name + ' 添加备注');
 }
 
 async function cmdSummary() {
-  const contacts = loadContacts();
+  await migrateContacts();
 
-  if (Object.keys(contacts).length === 0) {
+  const roster = getRoster();
+  const allContacts = await roster.list();
+
+  // Filter to contacts with ocean-agent app data
+  const agentContacts = allContacts.filter(c => !!c.apps?.[APP_NAME]);
+
+  if (agentContacts.length === 0) {
     console.log('暂无客户。');
     console.log('开启监听后，新客户会自动出现在这里。');
     return;
   }
 
   console.log('\n═══ 线索管道总览 ═══');
-  console.log('总客户数: ' + Object.keys(contacts).length);
+  console.log('总客户数: ' + agentContacts.length);
   console.log('');
 
   // Group by stage
@@ -242,14 +295,13 @@ async function cmdSummary() {
   for (const stage of STAGES) byStage[stage] = [];
   byStage['未知'] = [];
 
-  for (const [name, info] of Object.entries(contacts)) {
-    const data = typeof info === 'string' ? { openid: info, stage: '未知' } : info;
-    const stage = data.stage || '未知';
+  for (const c of agentContacts) {
+    const ad = c.apps[APP_NAME] || {};
+    const stage = ad.stage || '未知';
     if (!byStage[stage]) byStage[stage] = [];
-    byStage[stage].push({ name, ...data });
+    byStage[stage].push({ ...c, appData: ad });
   }
 
-  // Print pipeline
   const stageColors = {
     '新线索': '🔵', '需求采集中': '🟡', '方案已发': '🟠',
     '待成交': '🟢', '已成交': '✅', '已流失': '❌', '未知': '⚪'
@@ -262,8 +314,11 @@ async function cmdSummary() {
     const icon = stageColors[stage] || '⚪';
     console.log(icon + ' ' + stage + ' (' + items.length + '人)');
     for (const c of items) {
-      const last = c.last_contact ? ' | 最后联系: ' + daysAgo(c.last_contact) + '天前' : '';
-      console.log('  - ' + c.name + ' | ' + shortId(c.openid) + last);
+      const last = c.appData.last_contact
+        ? ' | 最后联系: ' + daysAgo(c.appData.last_contact) + '天前'
+        : '';
+      const openid = c.agents[0]?.openId || '';
+      console.log('  - ' + c.name + ' | ' + shortId(openid) + last);
     }
     console.log('');
   }
@@ -276,7 +331,7 @@ async function cmdSummary() {
   for (const [stage, days] of Object.entries(thresholds)) {
     const items = byStage[stage] || [];
     for (const c of items) {
-      const ago = c.last_contact ? daysAgo(c.last_contact) : 999;
+      const ago = c.appData.last_contact ? daysAgo(c.appData.last_contact) : 999;
       if (typeof ago === 'number' && ago >= days) {
         console.log('⚠️  ' + c.name + ' — ' + stage + '阶段，最后联系' + ago + '天前，建议跟进');
         alerts++;

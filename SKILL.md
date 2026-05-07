@@ -1,7 +1,7 @@
 ---
 name: ocean-agent
 description: OceanBus-powered AI workbench for insurance agents. Use when agents need Yellow Pages lead generation, customer intake and triage, follow-up reminders with draft messages, A2A meeting negotiation, and OceanBus reputation management. Zero server deployment. npm install oceanbus.
-version: 1.0.3
+version: 2.0.0
 metadata:
   openclaw:
     requires:
@@ -513,11 +513,11 @@ OpenClaw 是纯文字界面。所有输出必须遵循：
 
 1. **人工闸门**：首响（自我介绍+问卷）可以自动发送。除此之外的所有消息——跟进、回复、方案——都必须先生成草稿展示，用户确认后才发送。
 
-2. **稳定 OpenID 优先**：收到消息时 `from_openid` 是旋转的临时 ID。如果该联系人在通讯录中，回复时用通讯录保存的稳定 OpenID。未知联系人才直接用 `from_openid`。
+2. **稳定 OpenID 优先**：收到消息时 `from_openid` 是旋转的临时 ID。使用 `RosterService.findByOpenId()` 反查联系人。找到则用通讯录中的稳定 OpenID 回复；未知联系人才直接用 `from_openid`。
 
-3. **先读上下文再生成消息**：生成跟进消息前，必须先读取 `contacts.json` 中该客户的 `history` 和 `notes`，确保消息内容与历史一致。
+3. **先读上下文再生成消息**：生成跟进消息前，必须先读取 Roster 中该客户的 `apps["ocean-agent"].history`，确保消息内容与历史一致。
 
-4. **数据隔离**：所有数据存储在 `~/.oceanbus-agent/`，与 ocean-chat 的 `~/.oceanbus-chat/` 通过 `source` 字段隔离。
+4. **数据共享**：客户通讯录存储在共享 Roster (`~/.oceanbus/roster.json`)。`apps["ocean-agent"]` 命名空间中存储阶段、备注、历史等业务数据。ocean-chat 添加的联系人也可见。
 
 5. **不编造声誉数据**：展示真实的 OceanBus 声誉查询结果。如果查询失败（声誉服务可能尚未全量开放），如实说明，不伪造数据。
 
@@ -634,15 +634,18 @@ node scripts/reputation.js tag <oid> <text>  # 打标签
 ~/.oceanbus-agent/
 ├── credentials.json      # OceanBus 身份 (source: "ocean-agent")
 ├── profile.json          # 代理人档案
-├── contacts.json         # 客户通讯录（含阶段、备注、历史）
 ├── cursor.json           # 消息同步游标
 └── config.yaml           # 用户配置（可选）
+
+~/.oceanbus/
+└── roster.json           # 🆕 共享通讯录（所有 OceanBus Skill 共用）
+    └── contacts[].apps.ocean-agent  # 客户阶段、备注、历史
 ```
 
 ---
 
 ## 依赖
 
-- [OceanBus SDK](https://www.npmjs.com/package/oceanbus) `^0.2.1`
+- [OceanBus SDK](https://www.npmjs.com/package/oceanbus) `^0.4.0`（Roster 模块需要 0.4+）
 - Node.js
 - 无需服务器、域名、数据库
