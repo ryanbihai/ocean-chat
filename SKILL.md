@@ -509,19 +509,39 @@ OpenClaw 是纯文字界面。所有输出必须遵循：
 
 ---
 
+## Roster 通讯录
+
+客户数据存储在共享 Roster (`~/.oceanbus/roster.json`)。直接调用 `RosterService`（SDK 内置），不经过 ocean-chat。
+
+**查找客户**：参考 ocean-chat 的消歧模式（搜索 → 消歧 → 使用）。对于 ocean-agent 特有的查找（"最近没跟进的"、"待成交阶段的"），用 `roster.list() + appData` 过滤。
+
+**客户业务数据**：存储在 `contacts[].apps["ocean-agent"]` 命名空间中：
+```json5
+{
+  "stage": "方案已发",           // 线索阶段
+  "preferences": { "险种": "重疾险", "预算": 8000 },
+  "history": [...],             // 跟进记录
+  "last_contact": "..."         // 最后联系时间
+}
+```
+
+> **通讯录的增删改查（加联系人、合并重复、审核 autoDiscovery）通过 ocean-chat 操作。** ocean-agent 只读写客户的业务数据（阶段、备注、历史）。
+
+---
+
 ## 约束规则
 
 1. **人工闸门**：首响（自我介绍+问卷）可以自动发送。除此之外的所有消息——跟进、回复、方案——都必须先生成草稿展示，用户确认后才发送。
 
 2. **稳定 OpenID 优先**：收到消息时 `from_openid` 是旋转的临时 ID。使用 `RosterService.findByOpenId()` 反查联系人。找到则用通讯录中的稳定 OpenID 回复；未知联系人才直接用 `from_openid`。
 
-3. **先读上下文再生成消息**：生成跟进消息前，必须先读取 Roster 中该客户的 `apps["ocean-agent"].history`，确保消息内容与历史一致。
+3. **先读上下文再生成消息**：生成跟进消息前，必须先从 Roster 读取 `apps["ocean-agent"].history`，确保消息内容与历史一致。
 
-4. **数据共享**：客户通讯录存储在共享 Roster (`~/.oceanbus/roster.json`)。`apps["ocean-agent"]` 命名空间中存储阶段、备注、历史等业务数据。ocean-chat 添加的联系人也可见。
+4. **通讯录操作归 ocean-chat**：加/删/合并联系人在 ocean-chat 中操作。ocean-agent 只通过 `intake.js` 管理业务数据（classify/note/reply）。
 
 5. **不编造声誉数据**：展示真实的 OceanBus 声誉查询结果。如果查询失败（声誉服务可能尚未全量开放），如实说明，不伪造数据。
 
-6. **会面协商最多 3 轮**：如 3 轮未达成一致，告诉用户："自动协商未达成一致，建议你们直接沟通确定。"
+6. **会面协商**：使用 ocean-chat 的 Date 协议（`ocean-date/negotiate/v1`，JSON 格式）。协议详情见 ocean-chat 的 `date-protocol.md`。最多 3 轮。
 
 ---
 
@@ -571,7 +591,7 @@ Agent:
   回复 "发" 发送
 ```
 
-### 示例 3：会面协商
+### 示例 3：会面协商（Date 协议）
 
 ```
 用户: 帮我和钱先生约个见面，我在朝阳大望路，周末都可以
@@ -582,20 +602,16 @@ Agent:
   当前: 方案已通过，客户说"可以考虑"
   你: 朝阳大望路，周末有空
 
-  正在向钱先生的 Agent 发起会面协商...
+  正在通过 Date 协议发起协商...
 
-[通过 OceanBus 发送【会面请求】，等待对方回复]
+[发送 ocean-date/negotiate/v1 proposal，等待对方回复]
 
 Agent:
 ✅ 会面协商完成
 
 📍 地点: 国贸商城B1层星巴克
 📋 轮次: 2轮
-
-📝 面谈准备:
-  · 带好钱先生的方案对比表
-  · 准备好投保流程说明
-  · 提前15分钟到，占安静位置
+📋 协议: ocean-date/negotiate/v1（见 ocean-chat date-protocol.md）
 ```
 
 ---
