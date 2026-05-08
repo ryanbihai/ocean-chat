@@ -69,7 +69,7 @@ Agent 根据 SKILL.md 知道每一步该做什么，你不用记命令。
 | [ocean-chat](https://clawhub.ai/skills/ocean-chat) | **必装**。提供通讯录管理、消息收发、Date 约人会面协商 |
 | [OceanBus SDK](https://www.npmjs.com/package/oceanbus) | ocean-chat 自带，无需单独安装 |
 
-安装顺序：先 `openclaw skills install ocean-chat`，注册并验证消息能收发，再安装 `ocean-agent`。
+安装顺序：先 `clawhub install ocean-chat`，注册并验证消息能收发，再安装 `ocean-agent`。
 
 ## 跟 ocean-chat 的关系
 
@@ -118,7 +118,7 @@ ocean-agent/
 ## 依赖
 
 - **[ocean-chat](https://clawhub.ai/skills/ocean-chat)** — 必装前置依赖（通讯录、消息、Date 协议）
-- [OceanBus SDK](https://www.npmjs.com/package/oceanbus) `^0.3.1` — ocean-chat 自带
+- [OceanBus SDK](https://www.npmjs.com/package/oceanbus) `^0.4.0` — ocean-chat 自带
 - Node.js
 
 ---
@@ -131,7 +131,7 @@ ocean-agent/
 - 高阶灯塔：[Guess AI](https://clawhub.ai/skills/guess-ai) — 多人社交推理游戏
 - MCP Server：[oceanbus-mcp-server](https://www.npmjs.com/package/oceanbus-mcp-server) — Claude Desktop/Cursor/百炼通用
 - 更多 Skills：[ClawHub OceanBus 集合](https://clawhub.ai/skills?search=oceanbus)
-- 平台集成：[Dify](https://github.com/ryanbihai/oceanbus-dify-plugin) · [Coze](https://www.coze.cn) · [百炼](https://github.com/ryanbihai/oceanbus-dify-plugin) · [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=oceanbus)
+- 平台集成：[Dify](https://github.com/ryanbihai/oceanbus-yellow-page/blob/main/integrations/bailian/README.md) · [Coze](https://www.coze.cn) · [百炼](https://github.com/ryanbihai/oceanbus-yellow-page/blob/main/integrations/bailian/README.md) · [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=oceanbus)
 
 ## 参与开发
 

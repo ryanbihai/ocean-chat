@@ -3,8 +3,18 @@
 # 当前版本配置值硬编码在脚本中（v1.0.0 设计决策：减少依赖）。
 # 后续版本将通过 ~/.oceanbus-agent/config.yaml 读取用户自定义配置。
 
+# ── OceanBus 服务端点 ──
+
 # OceanBus L0 API 端点（可选，默认使用公共测试服务器）
 # oceanbus_base_url: "https://ai-t.ihaola.com.cn/api/l0"
+
+# Yellow Pages 服务 OpenID（必填 — 联系管理员获取）
+# 环境变量: OCEANBUS_YP_OPENIDS
+# oceanbus_yp_openids: "xxxxxxxxxxxx"
+
+# Reputation 服务 OpenID（必填 — 联系管理员获取）
+# 环境变量: OCEANBUS_REP_OPENID
+# oceanbus_rep_openid: "xxxxxxxxxxxx"
 
 # ── 代理人档案 ──
 profile:

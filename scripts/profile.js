@@ -84,7 +84,20 @@ async function interactiveSetup() {
   let ob;
   try {
     ob = await createOceanBus({ keyStore: { type: 'memory' } });
-    const reg = await ob.register();
+    let reg;
+    try {
+      reg = await ob.register();
+    } catch (e) {
+      if (typeof e.isRateLimited === 'function' && e.isRateLimited()) {
+        const wait = e.retryAfterSeconds
+          ? `${Math.ceil(e.retryAfterSeconds / 3600)} 小时`
+          : '一段时间';
+        console.error(`\n❌ 注册频率受限，请等待 ${wait} 后重试。`);
+      } else {
+        console.error('\n❌ OceanBus 注册失败: ' + e.message);
+      }
+      return;
+    }
     const openid = await ob.getOpenId();
     saveCredentials(reg.agent_id, reg.api_key, openid);
 
@@ -221,6 +234,8 @@ async function cmdPublish() {
     }
   }
 
+  // Prevent destroy() from auto-deregistering
+  ob.l1.yellowPages.clearIdentity();
   await ob.destroy();
 }
 
