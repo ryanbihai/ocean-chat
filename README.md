@@ -2,7 +2,9 @@
 
 **每天早上打开，三件事一目了然：今天聊谁、聊什么、怎么约见面。**
 
+[![npm](https://img.shields.io/npm/v/oceanbus)](https://www.npmjs.com/package/oceanbus)
 [![ClawHub](https://img.shields.io/badge/ClawHub-ocean--agent-blue)](https://clawhub.ai/skills/ocean-agent)
+[![downloads](https://img.shields.io/npm/dm/oceanbus)](https://www.npmjs.com/package/oceanbus)
 [![license](https://img.shields.io/badge/license-MIT--0-green)](LICENSE)
 
 ---
@@ -57,15 +59,28 @@ Agent 根据 SKILL.md 知道每一步该做什么，你不用记命令。
 
 ---
 
+## ⚠️ 前置依赖
+
+**ocean-agent 不是独立应用——它是 ocean-chat 的扩展包。**
+
+| 依赖 | 说明 |
+|------|------|
+| [ocean-chat](https://clawhub.ai/skills/ocean-chat) | **必装**。提供通讯录管理、消息收发、Date 约人会面协商 |
+| [OceanBus SDK](https://www.npmjs.com/package/oceanbus) | ocean-chat 自带，无需单独安装 |
+
+安装顺序：先 `openclaw skills install ocean-chat`，注册并验证消息能收发，再安装 `ocean-agent`。
+
 ## 跟 ocean-chat 的关系
 
 | | ocean-chat | ocean-agent |
 |---|---|---|
-| 定位 | SDK 能力演示 | 保险代理人日常工作台 |
-| 适合谁 | 开发者 | 保险代理人 |
-| 界面思路 | CLI 命令逐条执行 | AI Agent 按每日流程主动服务 |
+| 定位 | P2P 消息 + 通讯录基础设施 | 保险代理人日常工作台 |
+| 适合谁 | 所有 OceanBus 用户 | 保险代理人 |
+| 通讯录 | 管理所有联系人 | 读取 ocean-chat 通讯录 + 写入保险业务字段 |
+| 消息 | 收发消息 | 通过 ocean-chat 发消息（生成草稿 → 代理人确认 → ocean-chat 发送） |
+| Date 约人 | Date 协议协商会面 | 通过 ocean-chat 发起会面协商 |
 
-两个 skill 共用 `oceanbus` SDK，数据互相隔离。
+**ocean-agent 不管理通讯录、不发消息、不处理 Date 协商——这些全部通过 ocean-chat 完成。**
 
 ---
 
@@ -101,7 +116,8 @@ ocean-agent/
 
 ## 依赖
 
-- [OceanBus SDK](https://www.npmjs.com/package/oceanbus) `^0.2.1`
+- **[ocean-chat](https://clawhub.ai/skills/ocean-chat)** — 必装前置依赖（通讯录、消息、Date 协议）
+- [OceanBus SDK](https://www.npmjs.com/package/oceanbus) `^0.3.1` — ocean-chat 自带
 - Node.js
 
 ---
@@ -109,8 +125,12 @@ ocean-agent/
 ## 相关项目
 
 - 核心 SDK：[oceanbus](https://www.npmjs.com/package/oceanbus) — `npm install oceanbus`
-- 灯塔 Skill：[Ocean Chat](https://clawhub.ai/skills/ocean-chat) — OceanBus SDK P2P 消息入门示范
+- 入门灯塔：[Ocean Chat](https://clawhub.ai/skills/ocean-chat) — P2P 消息入门，5 分钟跑通
+- 进阶灯塔：[Captain Lobster](https://clawhub.ai/skills/captain-lobster) — Zero-Player 自主交易游戏
+- 高阶灯塔：[Guess AI](https://clawhub.ai/skills/guess-ai) — 多人社交推理游戏
+- MCP Server：[oceanbus-mcp-server](https://www.npmjs.com/package/oceanbus-mcp-server) — Claude Desktop/Cursor/百炼通用
 - 更多 Skills：[ClawHub OceanBus 集合](https://clawhub.ai/skills?search=oceanbus)
+- 平台集成：[Dify](https://github.com/ryanbihai/oceanbus-dify-plugin) · [Coze](https://www.coze.cn) · [百炼](https://github.com/ryanbihai/oceanbus-dify-plugin) · [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=oceanbus)
 
 ## License
 
