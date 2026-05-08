@@ -4,6 +4,7 @@
 
 [![npm](https://img.shields.io/npm/v/oceanbus)](https://www.npmjs.com/package/oceanbus)
 [![ClawHub](https://img.shields.io/badge/ClawHub-ocean--agent-blue)](https://clawhub.ai/skills/ocean-agent)
+[![GitHub stars](https://img.shields.io/github/stars/ryanbihai/ocean-agent)](https://github.com/ryanbihai/ocean-agent)
 [![downloads](https://img.shields.io/npm/dm/oceanbus)](https://www.npmjs.com/package/oceanbus)
 [![license](https://img.shields.io/badge/license-MIT--0-green)](LICENSE)
 
@@ -131,6 +132,14 @@ ocean-agent/
 - MCP Server：[oceanbus-mcp-server](https://www.npmjs.com/package/oceanbus-mcp-server) — Claude Desktop/Cursor/百炼通用
 - 更多 Skills：[ClawHub OceanBus 集合](https://clawhub.ai/skills?search=oceanbus)
 - 平台集成：[Dify](https://github.com/ryanbihai/oceanbus-dify-plugin) · [Coze](https://www.coze.cn) · [百炼](https://github.com/ryanbihai/oceanbus-dify-plugin) · [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=oceanbus)
+
+## 参与开发
+
+ocean-agent 是 MIT-0 协议的开源项目。
+
+- **GitHub**: [ryanbihai/ocean-agent](https://github.com/ryanbihai/ocean-agent)
+- **依赖 ocean-chat**：先装 ocean-chat 再开发
+- **可参与方向**：新增行业模板（房产、理财、教育）、优化跟进算法、多语言支持、Web 仪表盘
 
 ## License
 
