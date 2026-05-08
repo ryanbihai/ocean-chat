@@ -81,45 +81,111 @@ async function cmdCheck(target) {
     console.log('OpenID: ' + shortId(openid));
     console.log('');
 
-    if (result && result.data) {
-      const d = result.data[openid] || result.data;
+    if (result && result.data && result.data.results) {
+      const entry = result.data.results.find(r => r.openid === openid) || result.data.results[0];
+      if (!entry || entry.error) {
+        console.log('暂无声誉数据。');
+        console.log('成交后，引导客户通过 OceanBus 为你打标签，积累声誉。');
+        await ob.destroy();
+        return;
+      }
 
-      // Tag counts
-      if (d.tag_counts) {
-        console.log('── 标签统计 ──');
-        for (const [tag, count] of Object.entries(d.tag_counts)) {
-          const icon = tag === 'Reliable' ? '✅' : tag === 'Harassment' ? '⚠️' : tag === 'Illegal' ? '🚫' : '🏷️';
-          console.log('  ' + icon + ' ' + tag + ': ' + count + ' 次');
+      const f = entry.facts;
+
+      // ── 身份 ──
+      if (f && f.identity) {
+        console.log('── 身份 ──');
+        console.log('  注册时间: ' + (f.identity.registered_at || '未知'));
+        console.log('  活跃天数: ' + f.identity.days_active + ' 天');
+        console.log('');
+      }
+
+      // ── 通信 ──
+      if (f && f.communication) {
+        console.log('── 通信 ──');
+        console.log('  发送消息: ' + f.communication.messages_sent.toLocaleString());
+        console.log('  接收消息: ' + f.communication.messages_received.toLocaleString());
+        console.log('  历史伙伴: ' + f.communication.unique_partners + ' 人');
+        if (f.communication.partners_30d) {
+          console.log('  近期伙伴: ' + f.communication.partners_30d + ' 人 (30天)');
         }
         console.log('');
       }
 
-      // Free-form tags
-      if (d.freeform_tags && d.freeform_tags.length > 0) {
-        console.log('── 自由标签 ──');
-        for (const t of d.freeform_tags) {
-          console.log('  🏷️ ' + t.text + ' (' + t.count + ')');
+      // ── 评价（标签）──
+      if (f && f.evaluations) {
+        const tags = f.evaluations.tags || {};
+        const tagEntries = Object.entries(tags);
+        if (tagEntries.length > 0) {
+          console.log('── 他人评价 ──');
+          console.log('  独立评价人: ' + f.evaluations.unique_taggers + ' 人');
+          console.log('');
+          for (const [label, count] of tagEntries) {
+            const icon = label === '可靠' ? '✅' : label === '骚扰' ? '⚠️' : label === '违法' ? '🚫' : '🏷️';
+            console.log('  ' + icon + ' ' + label + ': ' + count + ' 次');
+          }
+          console.log('');
         }
+
+        if (f.evaluations.recent_tags && f.evaluations.recent_tags.length > 0) {
+          console.log('  最近评价:');
+          for (const t of f.evaluations.recent_tags) {
+            const date = t.applied_at ? t.applied_at.slice(0, 10) : '?';
+            console.log('    ' + date + ' — ' + t.label);
+          }
+          console.log('');
+        }
+      } else {
+        // Fallback: old core_tags / free_tags
+        if (entry.core_tags) {
+          console.log('── 他人评价 ──');
+          for (const [label, count] of Object.entries(entry.core_tags)) {
+            const icon = label === '可靠' ? '✅' : label === '骚扰' ? '⚠️' : label === '违法' ? '🚫' : '🏷️';
+            console.log('  ' + icon + ' ' + label + ': ' + count + ' 次');
+          }
+          console.log('');
+        }
+        if (entry.free_tags) {
+          console.log('── 自由标签 ──');
+          for (const [label, count] of Object.entries(entry.free_tags)) {
+            console.log('  🏷️ ' + label + ': ' + count + ' 次');
+          }
+          console.log('');
+        }
+      }
+
+      // ── 交易 ──
+      if (f && f.trade && f.trade.contracts_total > 0) {
+        console.log('── 交易 ──');
+        const rate = f.trade.contracts_total > 0
+          ? (f.trade.contracts_fulfilled / f.trade.contracts_total * 100).toFixed(1)
+          : '0';
+        console.log('  合约总数: ' + f.trade.contracts_total);
+        console.log('  履约: ' + f.trade.contracts_fulfilled + ' / 违约: ' + f.trade.contracts_broken);
+        console.log('  履约率: ' + rate + '%');
+        console.log('  交易量: ' + f.trade.total_volume.toLocaleString() + ' 金币');
         console.log('');
       }
 
-      // Tagger profiles
-      if (d.tagger_profiles) {
-        console.log('── 标记人画像 ──');
-        if (d.tagger_profiles.avg_reliable_pct !== undefined) {
-          console.log('  标记人平均可靠度: ' + (d.tagger_profiles.avg_reliable_pct * 100).toFixed(0) + '%');
+      // ── 举报 ──
+      if (f && f.reports) {
+        const against = f.reports.filed_against || [];
+        if (against.length > 0) {
+          console.log('── 举报记录 ──');
+          console.log('  被举报: ' + against.length + ' 次');
+          for (const r of against) {
+            console.log('    [' + r.type + '] ' + (r.timestamp || '?').slice(0, 10) + ' — 举报人: ' + shortId(r.reporter));
+          }
+          console.log('');
         }
-        if (d.tagger_profiles.avg_degree !== undefined) {
-          console.log('  标记人平均通信度: ' + d.tagger_profiles.avg_degree);
-        }
-        console.log('');
       }
 
-      // Trust summary
-      const reliable = (d.tag_counts && d.tag_counts.Reliable) || 0;
-      const harassment = (d.tag_counts && d.tag_counts.Harassment) || 0;
-      const illegal = (d.tag_counts && d.tag_counts.Illegal) || 0;
+      // ── 综合判断提示 ──
+      const reliable = (entry.core_tags && entry.core_tags['可靠']) || 0;
+      const harassment = (entry.core_tags && entry.core_tags['骚扰']) || 0;
+      const illegal = (entry.core_tags && entry.core_tags['违法']) || 0;
 
+      console.log('── 综合 ──');
       if (reliable > 0 && harassment === 0 && illegal === 0) {
         console.log('✅ 声誉良好 — 可以信任');
       } else if (harassment > 0 || illegal > 0) {
@@ -127,13 +193,14 @@ async function cmdCheck(target) {
       } else {
         console.log('⚪ 声誉数据较少 — 尚待积累');
       }
+      console.log('');
+      console.log('💡 以上为客观事实数据，具体信任判断由你（或你的 AI）自行做出。');
     } else {
       console.log('暂无声誉数据。');
       console.log('成交后，引导客户通过 OceanBus 为你打标签，积累声誉。');
     }
   } catch (e) {
     console.log('查询失败: ' + e.message);
-    console.log('(声誉服务可能需要 L1 权限，当前可能尚未对普通 Agent 开放)');
   }
 
   console.log('');
