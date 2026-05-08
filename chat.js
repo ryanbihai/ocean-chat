@@ -1,20 +1,24 @@
 #!/usr/bin/env node
 'use strict';
 
-// OceanBus Chat — A2A Communication Skill
+// OceanBus Chat — A2A Communication Skill with Conversation Threading
 //
-// Two AI agents negotiate a meeting place via OceanBus.
-// No server. No same-WiFi. Just the OceanBus network.
+// AI agents communicate, negotiate, and organize multi-topic conversations
+// via OceanBus. No server. No same-WiFi. Just the OceanBus network.
 //
 // Commands:
 //   node chat.js setup                        Register + get your OpenID
 //   node chat.js whoami                       Show your OpenID
-//   node chat.js add <name> <openid>          Save a friend
-//   node chat.js contacts                     List saved contacts
-//   node chat.js send <name|openid> <msg>     Send a message
+//   node chat.js add <name> <openid>          Save a contact to Roster
+//   node chat.js contacts                     List saved contacts (from Roster)
+//   node chat.js send <name|openid> <msg>     Send a message (Roster-aware)
 //   node chat.js check                        Check for new messages
+//   node chat.js thread create <name>         Start a conversation thread
+//   node chat.js thread reply <id> <msg>      Reply in a thread
+//   node chat.js thread list                  List all threads
 
-const { createOceanBus } = require('oceanbus');
+const { createOceanBus, RosterService } = require('oceanbus');
+const threads = require('./threads');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -23,15 +27,52 @@ const os = require('os');
 const DATA_DIR = path.join(os.homedir(), '.oceanbus-chat');
 const CRED_FILE = path.join(DATA_DIR, 'credentials.json');
 const CURSOR_FILE = path.join(DATA_DIR, 'cursor.json');
-const CONTACTS_FILE = path.join(DATA_DIR, 'contacts.json');
+const DATE_LOG_FILE = path.join(DATA_DIR, 'date-log.json');
+const LEGACY_CONTACTS_FILE = path.join(DATA_DIR, 'contacts.json');
+
+const SKILL_SOURCE = 'ocean-chat';
+
+// ── Roster ─────────────────────────────────────────────────────────────────
+
+let _roster = null;
+function getRoster() {
+  if (!_roster) _roster = new RosterService();
+  return _roster;
+}
+
+/** Migrate old contacts.json to Roster (one-time) */
+async function migrateContacts() {
+  if (!fs.existsSync(LEGACY_CONTACTS_FILE)) return;
+  try {
+    const oldContacts = JSON.parse(fs.readFileSync(LEGACY_CONTACTS_FILE, 'utf-8'));
+    const roster = getRoster();
+
+    for (const [name, openid] of Object.entries(oldContacts)) {
+      const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9一-鿿\-_]/g, '');
+      const existing = await roster.get(slug);
+      if (existing) continue; // already migrated
+
+      await roster.add({
+        name,
+        id: slug,
+        agents: [{ agentId: '', openId: openid, purpose: 'OceanBus 联系人', isDefault: true }],
+        tags: [],
+        aliases: [],
+        notes: '',
+        source: 'chat',
+      });
+    }
+
+    // Rename old file as backup
+    fs.renameSync(LEGACY_CONTACTS_FILE, LEGACY_CONTACTS_FILE + '.migrated');
+  } catch (_) { /* silently skip if migration fails */ }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function ensureDir() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
-
-const SKILL_SOURCE = 'ocean-chat';
 
 function saveCredentials(agentId, apiKey, openid) {
   ensureDir();
@@ -45,28 +86,9 @@ function loadCredentials() {
   if (!fs.existsSync(CRED_FILE)) return null;
   try {
     const data = JSON.parse(fs.readFileSync(CRED_FILE, 'utf-8'));
-    // Ignore credentials created by other skills (e.g. captain-lobster)
     if (data.source && data.source !== SKILL_SOURCE) return null;
     return data;
   } catch (_) { return null; }
-}
-
-function loadContacts() {
-  ensureDir();
-  if (!fs.existsSync(CONTACTS_FILE)) return {};
-  try { return JSON.parse(fs.readFileSync(CONTACTS_FILE, 'utf-8')); } catch (_) { return {}; }
-}
-
-function saveContacts(contacts) {
-  ensureDir();
-  fs.writeFileSync(CONTACTS_FILE, JSON.stringify(contacts, null, 2));
-}
-
-function resolveName(openid, contacts) {
-  for (const [name, id] of Object.entries(contacts)) {
-    if (id === openid) return name;
-  }
-  return null;
 }
 
 function saveCursor(seq) {
@@ -87,26 +109,44 @@ function shortId(openid) {
   return openid.slice(0, 16) + '...';
 }
 
+/** Detect and format a protocol message for display */
+function formatProtocolDisplay(content) {
+  return threads.formatProtocolDisplay(content);
+}
+
+// ── Date log ──────────────────────────────────────────────────────────────
+
+function loadDateLog() {
+  if (!fs.existsSync(DATE_LOG_FILE)) return { entries: [], availability: { hints: '', blocked: [] } };
+  try { return JSON.parse(fs.readFileSync(DATE_LOG_FILE, 'utf-8')); } catch (_) { return { entries: [], availability: { hints: '', blocked: [] } }; }
+}
+
+function saveDateLog(log) {
+  ensureDir();
+  fs.writeFileSync(DATE_LOG_FILE, JSON.stringify(log, null, 2));
+}
+
 // ── Subcommands ───────────────────────────────────────────────────────────
 
 async function cmdSetup() {
   ensureDir();
+  await migrateContacts(); // one-time migration
 
   const existing = loadCredentials();
   if (existing) {
-    // Show contacts if any
-    const contacts = loadContacts();
-    const names = Object.keys(contacts);
+    const roster = getRoster();
+    const contacts = await roster.list();
 
     console.log('已注册。');
     console.log('你的 OpenID: ' + existing.openid);
     console.log('(简写: ' + shortId(existing.openid) + ')');
     console.log('');
 
-    if (names.length > 0) {
-      console.log('通讯录中有 ' + names.length + ' 位联系人:');
-      for (const name of names) {
-        console.log('  - ' + name + ' (' + shortId(contacts[name]) + ')');
+    if (contacts.length > 0) {
+      console.log('通讯录中有 ' + contacts.length + ' 位联系人:');
+      for (const c of contacts) {
+        const openid = c.agents[0]?.openId || '';
+        console.log('  - ' + c.name + (openid ? ' (' + shortId(openid) + ')' : ''));
       }
       console.log('');
     }
@@ -119,10 +159,23 @@ async function cmdSetup() {
   console.log('正在注册 OceanBus 身份...');
 
   const ob = await createOceanBus({ keyStore: { type: 'memory' } });
-  const reg = await ob.register();
-  const openid = await ob.getOpenId();
-
-  saveCredentials(reg.agent_id, reg.api_key, openid);
+  let openid;
+  try {
+    const reg = await ob.register();
+    openid = await ob.getOpenId();
+    saveCredentials(reg.agent_id, reg.api_key, openid);
+  } catch (e) {
+    if (typeof e.isRateLimited === 'function' && e.isRateLimited()) {
+      const wait = e.retryAfterSeconds
+        ? `${Math.ceil(e.retryAfterSeconds / 3600)} 小时`
+        : '一段时间';
+      console.error(`注册频率受限，请等待 ${wait} 后重试。`);
+    } else {
+      console.error('OceanBus 注册失败: ' + e.message);
+    }
+    await ob.destroy();
+    process.exit(1);
+  }
   await ob.destroy();
 
   console.log('');
@@ -153,25 +206,57 @@ async function cmdAdd(name, openid) {
     return;
   }
 
-  const contacts = loadContacts();
-  contacts[name] = openid;
-  saveContacts(contacts);
+  await migrateContacts();
+
+  const roster = getRoster();
+  const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9一-鿿\-_]/g, '');
+
+  // Check if contact already exists
+  const existing = await roster.get(id);
+  if (existing && existing.status === 'active') {
+    // Add additional agent if different OpenID
+    const hasAgent = existing.agents.some(a => a.openId === openid);
+    if (!hasAgent) {
+      await roster.update(id, {
+        agents: [...existing.agents, { agentId: '', openId: openid, purpose: 'OceanBus 联系人', isDefault: false }],
+      });
+      console.log('已为 ' + name + ' 添加新的 Agent 地址');
+    } else {
+      console.log(name + ' 已存在，无需重复添加');
+    }
+    return;
+  }
+
+  await roster.add({
+    name,
+    id,
+    agents: [{ agentId: '', openId: openid, purpose: 'OceanBus 联系人', isDefault: true }],
+    tags: [],
+    aliases: [],
+    notes: '',
+    source: 'chat',
+  });
 
   console.log('已添加联系人: ' + name + ' (' + shortId(openid) + ')');
   console.log('现在可以用名字发消息: node chat.js send ' + name + ' <消息>');
 }
 
 async function cmdContacts() {
-  const contacts = loadContacts();
-  const names = Object.keys(contacts);
-  if (names.length === 0) {
+  await migrateContacts();
+
+  const roster = getRoster();
+  const contacts = await roster.list();
+
+  if (contacts.length === 0) {
     console.log('通讯录为空。');
     console.log('添加联系人: node chat.js add <名字> <OpenID>');
     return;
   }
-  console.log('通讯录 (' + names.length + ' 人):');
-  for (const name of names) {
-    console.log('  ' + name + ' — ' + shortId(contacts[name]));
+  console.log('通讯录 (' + contacts.length + ' 人):');
+  for (const c of contacts) {
+    const openid = c.agents[0]?.openId || '';
+    const tagStr = c.tags.length > 0 ? ' [' + c.tags.join(', ') + ']' : '';
+    console.log('  ' + c.name + ' — ' + shortId(openid) + tagStr);
   }
 }
 
@@ -187,9 +272,39 @@ async function cmdSend(target, message) {
     return;
   }
 
-  // Resolve name to OpenID
-  const contacts = loadContacts();
-  const openid = contacts[target] || target;
+  await migrateContacts();
+
+  const roster = getRoster();
+
+  // Resolve target using Roster search
+  const searchResult = await roster.search(target);
+  let openid, displayName;
+
+  if (searchResult.exact.length === 1) {
+    const contact = searchResult.exact[0];
+    openid = contact.agents[0]?.openId || target;
+    displayName = contact.name;
+    await roster.touch(contact.id);
+  } else if (searchResult.exact.length > 1) {
+    // Multiple exact matches — use the first one with agents
+    const withAgent = searchResult.exact.find(e => e.agents.length > 0);
+    if (withAgent) {
+      openid = withAgent.agents[0].openId;
+      displayName = withAgent.name;
+    } else {
+      openid = target;
+      displayName = target;
+    }
+  } else if (searchResult.fuzzy.length > 0) {
+    const contact = searchResult.fuzzy[0];
+    openid = contact.agents[0]?.openId || target;
+    displayName = contact.name;
+    await roster.touch(contact.id);
+  } else {
+    // Treat as raw OpenID
+    openid = target;
+    displayName = shortId(target);
+  }
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
@@ -198,9 +313,7 @@ async function cmdSend(target, message) {
 
   await ob.send(openid, message);
 
-  const displayName = contacts[target] ? target : shortId(openid);
   console.log('已发送 → ' + displayName);
-
   await ob.destroy();
 }
 
@@ -211,7 +324,8 @@ async function cmdCheck() {
     return;
   }
 
-  const contacts = loadContacts();
+  await migrateContacts();
+
   const lastSeq = loadCursor();
 
   const ob = await createOceanBus({
@@ -219,6 +333,7 @@ async function cmdCheck() {
     identity: { agent_id: creds.agent_id, api_key: creds.api_key },
   });
 
+  const roster = getRoster();
   const messages = await ob.sync(lastSeq > 0 ? lastSeq : undefined);
 
   if (messages.length === 0) {
@@ -227,13 +342,28 @@ async function cmdCheck() {
     let maxSeq = lastSeq;
 
     for (const msg of messages) {
-      const name = resolveName(msg.from_openid, contacts);
-      const from = name ? name + ' (' + shortId(msg.from_openid) + ')' : msg.from_openid;
+      const contact = await roster.findByOpenId(msg.from_openid);
+      const from = contact
+        ? contact.name + ' (' + shortId(msg.from_openid) + ')'
+        : msg.from_openid;
+
+      // Handle thread protocol
+      const threadResult = threads.handleThreadProtocol(msg, true, contact?.name || null);
 
       console.log('── 来自 ' + from + ' ──');
       console.log('  ' + formatTime(msg.created_at));
+
+      if (threadResult) {
+        console.log('  [' + (threadResult.thread_id || '').slice(0, 14) + '...]'
+          + (threadResult.subject ? ' ' + threadResult.subject : ''));
+      }
       console.log('');
-      console.log(msg.content);
+      if (threadResult && threadResult.displayText) {
+        console.log(threadResult.displayText);
+      } else {
+        const protocolDisplay = formatProtocolDisplay(msg.content);
+        console.log(protocolDisplay || msg.content);
+      }
       console.log('');
 
       const seq = typeof msg.seq_id === 'number' ? msg.seq_id : parseInt(msg.seq_id, 10);
@@ -246,7 +376,120 @@ async function cmdCheck() {
   await ob.destroy();
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────
+// ── Date ──────────────────────────────────────────────────────────────────
+
+async function cmdDate(target, type, opts) {
+  const creds = loadCredentials();
+  if (!creds) { console.log('尚未注册。运行: node chat.js setup'); return; }
+  if (!target || !type) {
+    console.log('用法: node chat.js date <名字> <类型> [--time <ISO>] [--location <地点>] [--notes <备注>]');
+    console.log('类型: proposal | counter | accept | reject | withdraw');
+    return;
+  }
+
+  const validTypes = ['proposal', 'counter', 'accept', 'reject', 'withdraw'];
+  if (!validTypes.includes(type)) {
+    console.log('无效类型: ' + type + '。可选: ' + validTypes.join(', '));
+    return;
+  }
+
+  await migrateContacts();
+
+  const roster = getRoster();
+  const searchResult = await roster.search(target);
+  let openid, displayName;
+
+  if (searchResult.exact.length === 1) {
+    openid = searchResult.exact[0].agents[0]?.openId || target;
+    displayName = searchResult.exact[0].name;
+  } else if (searchResult.fuzzy.length > 0) {
+    openid = searchResult.fuzzy[0].agents[0]?.openId || target;
+    displayName = searchResult.fuzzy[0].name;
+  } else {
+    console.log('未找到联系人: ' + target);
+    return;
+  }
+
+  const payload = {};
+  if (opts.time) payload.time = opts.time;
+  if (opts.location) payload.location = opts.location;
+  if (opts.notes) payload.notes = opts.notes;
+
+  const msg = JSON.stringify({
+    type: 'protocol',
+    protocol: 'ocean-date/negotiate/v1',
+    structured: { type, payload },
+  });
+
+  const ob = await createOceanBus({
+    keyStore: { type: 'memory' },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+  });
+
+  await ob.send(openid, msg);
+  await roster.touch(searchResult.exact[0]?.id || searchResult.fuzzy[0]?.id);
+
+  const typeLabel = { proposal: '提案', counter: '反提案', accept: '接受', reject: '拒绝', withdraw: '撤回' };
+  console.log('📅 ' + typeLabel[type] + ' → ' + displayName);
+  if (payload.time) console.log('  时间: ' + payload.time);
+  if (payload.location) console.log('  地点: ' + payload.location);
+
+  // Auto-block on accept
+  if (type === 'accept' && payload.time) {
+    const log = loadDateLog();
+    log.entries.push({
+      id: 'date_' + Date.now(),
+      title: (payload.notes || '与 ' + displayName + ' 的约会'),
+      time: payload.time,
+      location: payload.location || '',
+      with: searchResult.exact[0]?.id || searchResult.fuzzy[0]?.id || target,
+      status: 'confirmed',
+      createdAt: new Date().toISOString(),
+    });
+    if (!log.availability.blocked.includes(payload.time)) {
+      log.availability.blocked.push(payload.time);
+    }
+    saveDateLog(log);
+    console.log('  📌 已加入你的日程（自动 blocked）');
+  }
+
+  await ob.destroy();
+}
+
+// ── Availability ──────────────────────────────────────────────────────────
+
+async function cmdAvailability(args) {
+  if (args[0] === 'set') {
+    const text = args.slice(1).join(' ');
+    if (!text) { console.log('用法: node chat.js availability set <你的空闲时间描述>'); return; }
+    const log = loadDateLog();
+    log.availability.hints = text;
+    log.availability.updatedAt = new Date().toISOString();
+    saveDateLog(log);
+    console.log('✅ 空闲偏好已更新: ' + text);
+    console.log('Agent 协商时将自动参考此偏好，不再反复打扰你。');
+  } else {
+    const log = loadDateLog();
+    const a = log.availability;
+    console.log('📅 你的空闲偏好: ' + (a.hints || '（未设置）'));
+    if (a.blocked.length > 0) {
+      console.log('⛔ 已占用的时间:');
+      a.blocked.forEach(t => {
+        const entry = log.entries.find(e => e.time === t);
+        console.log('  ' + t + (entry ? ' — ' + entry.title : ''));
+      });
+    }
+    if (log.entries.length > 0) {
+      console.log('📋 已确认的约会 (' + log.entries.filter(e => e.status === 'confirmed').length + '):');
+      log.entries.filter(e => e.status === 'confirmed').forEach(e => {
+        console.log('  ' + e.time + ' — ' + e.title + (e.location ? ' @ ' + e.location : ''));
+      });
+    }
+    if (!a.hints && a.blocked.length === 0) console.log('设置: node chat.js availability set "工作日晚7点后，周末全天"');
+  }
+}
+
+// ── Yellow Pages ──────────────────────────────────────────────────────────
 
 async function cmdPublish(name) {
   const creds = loadCredentials();
@@ -276,6 +519,7 @@ async function cmdPublish(name) {
     }
   }
 
+  ob.l1.yellowPages.clearIdentity();
   await ob.destroy();
 }
 
@@ -335,28 +579,268 @@ async function cmdListen() {
   const creds = loadCredentials();
   if (!creds) { console.log('尚未注册。运行: node chat.js setup'); return; }
 
+  await migrateContacts();
+
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
     identity: { agent_id: creds.agent_id, api_key: creds.api_key },
   });
 
-  const contacts = loadContacts();
+  const roster = getRoster();
 
   console.log('[Ocean Chat] 实时监听中... 按 Ctrl+C 停止\n');
 
-  ob.startListening((msg) => {
-    const name = resolveName(msg.from_openid, contacts);
-    const from = name ? name + ' (' + shortId(msg.from_openid) + ')' : msg.from_openid;
+  ob.startListening(async (msg) => {
+    const contact = await roster.findByOpenId(msg.from_openid);
+    const from = contact
+      ? contact.name + ' (' + shortId(msg.from_openid) + ')'
+      : msg.from_openid;
     const time = formatTime(msg.created_at);
-    process.stdout.write('\r\x1b[K'); // clear current line
+
+    // Handle thread protocol
+    const threadResult = threads.handleThreadProtocol(msg, true, contact?.name || null);
+
+    process.stdout.write('\r\x1b[K');
     console.log('── ' + from + ' · ' + time + ' ──');
-    console.log(msg.content);
+    if (threadResult) {
+      console.log('  [' + (threadResult.thread_id || '').slice(0, 14) + '...]'
+        + (threadResult.subject ? ' ' + threadResult.subject : ''));
+    }
+    if (threadResult && threadResult.displayText) {
+      console.log(threadResult.displayText);
+    } else {
+      const protocolDisplay = formatProtocolDisplay(msg.content);
+      console.log(protocolDisplay || msg.content);
+    }
     console.log('');
   });
 
-  // Keep running until SIGINT
-  await new Promise(() => {}); // never resolves — waits for signal
+  await new Promise(() => {});
 }
+
+// ── Thread ──────────────────────────────────────────────────────────────────
+
+async function cmdThreadCreate(target, subject, payloadStr) {
+  const creds = loadCredentials();
+  if (!creds) { console.log('尚未注册。运行: node chat.js setup'); return; }
+  if (!target || !subject) {
+    console.log('用法: node chat.js thread create <名字> --subject "主题" [--payload \'{"key":"value"}\']');
+    return;
+  }
+
+  await migrateContacts();
+  const roster = getRoster();
+
+  const searchResult = await roster.search(target);
+  let openid, displayName;
+  if (searchResult.exact.length > 0) {
+    openid = searchResult.exact[0].agents[0]?.openId || target;
+    displayName = searchResult.exact[0].name;
+  } else if (searchResult.fuzzy.length > 0) {
+    openid = searchResult.fuzzy[0].agents[0]?.openId || target;
+    displayName = searchResult.fuzzy[0].name;
+  } else {
+    console.log('未找到联系人: ' + target);
+    return;
+  }
+
+  let payload = {};
+  if (payloadStr) {
+    try { payload = JSON.parse(payloadStr); } catch (_) {
+      console.log('payload 格式无效，需为合法 JSON');
+      return;
+    }
+  }
+
+  const tid = threads.createThread(openid, displayName, subject, payload);
+
+  const msg = JSON.stringify({
+    type: 'protocol',
+    protocol: 'ocean-thread/v1',
+    structured: { action: 'create', thread_id: tid, subject, payload },
+  });
+
+  const ob = await createOceanBus({
+    keyStore: { type: 'memory' },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+  });
+  await ob.send(openid, msg);
+  await ob.destroy();
+
+  console.log('🧵 已创建线程 → ' + displayName);
+  console.log('   ID: ' + tid);
+  console.log('   主题: ' + subject);
+}
+
+async function cmdThreadReply(threadId, message) {
+  const creds = loadCredentials();
+  if (!creds) { console.log('尚未注册。运行: node chat.js setup'); return; }
+  if (!threadId || !message) {
+    console.log('用法: node chat.js thread reply <thread_id> <消息>');
+    return;
+  }
+
+  const t = threads.getThread(threadId);
+  if (!t) {
+    console.log('线程不存在: ' + threadId);
+    console.log('查看所有线程: node chat.js thread list');
+    return;
+  }
+  if (t.status === 'resolved') {
+    console.log('线程已关闭，请先重开: node chat.js thread reopen ' + threadId);
+    return;
+  }
+
+  const msg = JSON.stringify({
+    type: 'protocol',
+    protocol: 'ocean-thread/v1',
+    structured: {
+      action: 'reply', thread_id: threadId,
+      subject: t.subject, payload: { text: message },
+    },
+  });
+
+  const ob = await createOceanBus({
+    keyStore: { type: 'memory' },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+  });
+  await ob.send(t.participant, msg);
+  await ob.destroy();
+
+  // Record locally only after send succeeds
+  threads.addMessage(threadId, 'sent', message, null);
+
+  console.log('💬 已回复线程 [' + threadId.slice(0, 14) + '...] -> ' + t.participant_name);
+}
+
+function cmdThreadList() {
+  const all = threads.listThreads();
+  if (all.length === 0) {
+    console.log('暂无对话线程。');
+    console.log('创建线程: node chat.js thread create <名字> --subject "主题"');
+    return;
+  }
+
+  const active = all.filter(t => t.status === 'active');
+  const resolved = all.filter(t => t.status === 'resolved');
+
+  if (active.length > 0) {
+    console.log('活跃对话 (' + active.length + '):\n');
+    for (const t of active.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))) {
+      const time = new Date(t.updated_at).toLocaleTimeString('zh-CN', { hour12: false });
+      console.log('  ' + t.thread_id.slice(0, 14) + '...  ' + t.subject);
+      console.log('    对方: ' + (t.participant_name || t.participant.slice(0, 16) + '...') +
+        ' | ' + t.messages.length + '条消息 | ' + time);
+      console.log('');
+    }
+  }
+
+  if (resolved.length > 0) {
+    console.log('已结束对话 (' + resolved.length + '):\n');
+    for (const t of resolved.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))) {
+      const time = new Date(t.updated_at).toLocaleTimeString('zh-CN', { hour12: false });
+      console.log('  ' + t.thread_id.slice(0, 14) + '...  ' + t.subject + '  ✅ ' + time);
+    }
+    console.log('');
+  }
+}
+
+function cmdThreadShow(threadId) {
+  if (!threadId) {
+    console.log('用法: node chat.js thread show <thread_id>');
+    return;
+  }
+
+  let t = threads.getThread(threadId);
+  if (!t) {
+    const all = threads.listThreads();
+    t = all.find(t => t.thread_id.startsWith(threadId));
+    if (!t) { console.log('线程不存在: ' + threadId); return; }
+  }
+
+  const statusIcon = t.status === 'active' ? '🟢' : '✅';
+  const created = new Date(t.created_at).toLocaleString('zh-CN');
+  console.log('线程: ' + t.subject);
+  console.log('状态: ' + statusIcon + ' ' + t.status +
+    ' | 对方: ' + (t.participant_name || t.participant.slice(0, 16) + '...') +
+    ' | 创建: ' + created);
+  console.log('ID: ' + t.thread_id);
+  console.log('');
+
+  if (t.messages.length === 0) {
+    console.log('  (暂无消息)');
+  } else {
+    for (const m of t.messages) {
+      const dir = m.direction === 'sent' ? '->' : '<-';
+      const time = new Date(m.timestamp).toLocaleTimeString('zh-CN', { hour12: false });
+      console.log('  ' + dir + ' ' + time + '  ' + m.content);
+    }
+  }
+  console.log('');
+}
+
+async function cmdThreadResolve(threadId) {
+  const creds = loadCredentials();
+  if (!creds) { console.log('尚未注册。运行: node chat.js setup'); return; }
+  if (!threadId) {
+    console.log('用法: node chat.js thread resolve <thread_id>');
+    return;
+  }
+
+  const t = threads.getThread(threadId);
+  if (!t) { console.log('线程不存在: ' + threadId); return; }
+
+  const msg = JSON.stringify({
+    type: 'protocol',
+    protocol: 'ocean-thread/v1',
+    structured: { action: 'resolve', thread_id: t.thread_id, subject: t.subject },
+  });
+
+  const ob = await createOceanBus({
+    keyStore: { type: 'memory' },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+  });
+  await ob.send(t.participant, msg);
+  await ob.destroy();
+
+  threads.resolveThread(threadId);
+
+  console.log('✅ 已结束线程: ' + t.subject);
+}
+
+async function cmdThreadReopen(threadId) {
+  const creds = loadCredentials();
+  if (!creds) { console.log('尚未注册。运行: node chat.js setup'); return; }
+  if (!threadId) {
+    console.log('用法: node chat.js thread reopen <thread_id>');
+    return;
+  }
+
+  let t = threads.getThread(threadId);
+  if (!t || t.status !== 'resolved') {
+    console.log('线程不存在或未关闭: ' + threadId);
+    return;
+  }
+
+  const msg = JSON.stringify({
+    type: 'protocol',
+    protocol: 'ocean-thread/v1',
+    structured: { action: 'reopen', thread_id: t.thread_id, subject: t.subject },
+  });
+
+  const ob = await createOceanBus({
+    keyStore: { type: 'memory' },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+  });
+  await ob.send(t.participant, msg);
+  await ob.destroy();
+
+  threads.reopenThread(threadId);
+
+  console.log('🔄 已重开线程: ' + t.subject);
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
   const args = process.argv.slice(2);
@@ -368,16 +852,26 @@ async function main() {
     console.log('命令:');
     console.log('  node chat.js setup                      注册 + 获取你的 OpenID');
     console.log('  node chat.js whoami                     查看你的 OpenID');
-    console.log('  node chat.js add <名字> <OpenID>        添加联系人');
-    console.log('  node chat.js contacts                   查看通讯录');
+    console.log('  node chat.js add <名字> <OpenID>        添加联系人（存入 Roster）');
+    console.log('  node chat.js contacts                   查看通讯录（读取 Roster）');
     console.log('  node chat.js send <名字|OpenID> <消息>  发送消息');
     console.log('  node chat.js check                      查看新消息');
     console.log('  node chat.js listen                     实时监听（消息自动弹出）');
     console.log('  node chat.js publish <名字>             发布到黄页（让朋友搜到你）');
     console.log('  node chat.js discover <名字>            搜索朋友的 OpenID');
     console.log('  node chat.js unpublish                  从黄页移除');
+    console.log('  node chat.js date <名字> <类型>         发送 Date 协商消息');
+    console.log('     --time <ISO> --location <地点> --notes <备注>');
+    console.log('  node chat.js availability [set <描述>]  查看/设置空闲偏好');
+    console.log('  node chat.js thread create <名字>       创建对话线程');
+    console.log('       --subject "主题" [--payload \'{"k":"v"}\']');
+    console.log('  node chat.js thread reply <id> <消息>   在线程中回复');
+    console.log('  node chat.js thread list                列出所有线程');
+    console.log('  node chat.js thread show <id>           查看线程详情');
+    console.log('  node chat.js thread resolve <id>        结束线程');
+    console.log('  node chat.js thread reopen <id>         重开已结束线程');
     console.log('');
-    console.log('数据存储在: ' + DATA_DIR);
+    console.log('数据存储在: ' + DATA_DIR + ' （通讯录存储在 ~/.oceanbus/roster.json）');
     return;
   }
 
@@ -420,6 +914,49 @@ async function main() {
       case 'unpublish':
         await cmdUnpublish();
         break;
+      case 'date': {
+        const target = args[1];
+        const type = args[2];
+        // Parse --time, --location, --notes flags from remaining args
+        const opts = {};
+        for (let i = 3; i < args.length; i++) {
+          if (args[i] === '--time' && i + 1 < args.length) { opts.time = args[++i]; }
+          else if (args[i] === '--location' && i + 1 < args.length) { opts.location = args[++i]; }
+          else if (args[i] === '--notes' && i + 1 < args.length) { opts.notes = args[++i]; }
+        }
+        await cmdDate(target, type, opts);
+        break;
+      }
+      case 'availability':
+        await cmdAvailability(args.slice(1));
+        break;
+      case 'thread': {
+        const sub = args[1];
+        if (sub === 'create') {
+          // Parse --subject and --payload flags
+          let subject = '', payload = null;
+          for (let i = 2; i < args.length; i++) {
+            if (args[i] === '--subject' && i + 1 < args.length) { subject = args[++i]; }
+            else if (args[i] === '--payload' && i + 1 < args.length) { payload = args[++i]; }
+            else if (i === 2) { subject = args[i]; } // positional subject (backward compat)
+          }
+          await cmdThreadCreate(args[2] && !args[2].startsWith('--') ? args[2] : null, subject, payload);
+        } else if (sub === 'reply') {
+          await cmdThreadReply(args[2], args.slice(3).join(' '));
+        } else if (sub === 'list') {
+          cmdThreadList();
+        } else if (sub === 'show') {
+          cmdThreadShow(args[2]);
+        } else if (sub === 'resolve') {
+          await cmdThreadResolve(args[2]);
+        } else if (sub === 'reopen') {
+          await cmdThreadReopen(args[2]);
+        } else {
+          console.log('thread 子命令: create | reply | list | show | resolve | reopen');
+          console.log('运行 "node chat.js help" 查看详细帮助。');
+        }
+        break;
+      }
       default:
         console.log('未知命令: ' + cmd);
         console.log('运行 "node chat.js help" 查看帮助。');

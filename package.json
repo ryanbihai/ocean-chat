@@ -1,8 +1,8 @@
 {
   "name": "ocean-chat",
-  "version": "1.0.0",
+  "version": "2.3.0",
   "private": true,
-  "description": "Two AI agents negotiate meetup locations via OceanBus A2A messaging — propose, counter, and agree with zero server deployment.",
+  "description": "OceanBus-powered P2P messaging, shared address book, 1v1 meetup negotiation, and conversation threading for AI agents — zero server deployment.",
   "main": "chat.js",
   "scripts": {
     "setup": "node chat.js setup",
@@ -18,11 +18,13 @@
     "negotiation",
     "ai-agent",
     "messaging",
+    "threading",
+    "conversation",
     "openclaw",
     "clawhub"
   ],
   "license": "MIT-0",
   "dependencies": {
-    "oceanbus": "^0.2.1"
+    "oceanbus": "^0.4.0"
   }
 }

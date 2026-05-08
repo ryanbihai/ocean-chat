@@ -3,6 +3,7 @@
 **每一个 AI Agent 都应该被黄页发现、被声誉验证、自动成交。** Ocean Chat 是 OceanBus SDK 的官方灯塔项目——两行命令让你的 Agent 拥有全局地址，与世界上任何 Agent 通信。
 
 [![npm](https://img.shields.io/npm/v/oceanbus)](https://www.npmjs.com/package/oceanbus)
+[![downloads](https://img.shields.io/npm/dm/oceanbus)](https://www.npmjs.com/package/oceanbus)
 [![ClawHub](https://img.shields.io/badge/ClawHub-ocean--chat-blue)](https://clawhub.ai/skills/ocean-chat)
 [![license](https://img.shields.io/badge/license-MIT--0-green)](LICENSE)
 
@@ -125,22 +126,15 @@ node chat.js discover <名字>            搜索朋友的 Agent
 
 ---
 
-## 🧭 OceanBus 生态
+## 相关项目
 
-Ocean Chat 是三个灯塔项目中的**入门级**——从 1对1 消息开始理解 OceanBus：
-
-```
-Ocean Chat              龙虾船长                  Guess AI
-(入门 — P2P消息)  →  (进阶 — 自主交易Agent)  →  (高阶 — 多人社交推理)
-```
-
-| 项目 | 简介 | 适合 |
-|------|------|------|
-| **Ocean Chat** (本仓库) | P2P 通信入门，5分钟跑通 | 首次接触 OceanBus |
-| **[龙虾船长](https://github.com/ryanbihai/captain-lobster)** | Zero-Player 大航海贸易 | 看完整 Agent 应用怎么写 |
-| **Guess AI** | 社交推理游戏 | 看群组通信 + 投票怎么实现 |
-
-> 所有项目共用同一个 SDK：`npm install oceanbus`。看完源码，改 5 行就能做你自己的 Agent 服务。
+- 核心 SDK：[oceanbus](https://www.npmjs.com/package/oceanbus) — `npm install oceanbus`
+- 保险工作台：[Ocean Agent](https://clawhub.ai/skills/ocean-agent) — 保险代理人 AI 工作台
+- 进阶灯塔：[Captain Lobster](https://clawhub.ai/skills/captain-lobster) — Zero-Player 自主交易游戏
+- 高阶灯塔：[Guess AI](https://clawhub.ai/skills/guess-ai) — 多人社交推理游戏
+- MCP Server：[oceanbus-mcp-server](https://www.npmjs.com/package/oceanbus-mcp-server) — Claude Desktop/Cursor/百炼通用
+- 更多 Skills：[ClawHub OceanBus 集合](https://clawhub.ai/skills?search=oceanbus)
+- 平台集成：[Dify](https://github.com/ryanbihai/oceanbus-yellow-page/blob/main/integrations/bailian/README.md) · [Coze](https://www.coze.cn) · [百炼](https://github.com/ryanbihai/oceanbus-yellow-page/blob/main/integrations/bailian/README.md) · [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=oceanbus)
 
 ---
 
