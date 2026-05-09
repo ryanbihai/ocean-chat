@@ -11,6 +11,7 @@ import { keyNewCommand } from './commands/key-new';
 import { keyRevokeCommand } from './commands/key-revoke';
 import { addCommand } from './commands/add';
 import { contactsCommand } from './commands/contacts';
+import { introduceCommand } from './commands/introduce';
 
 export function runCli(argv: string[] = process.argv): void {
   yargs(hideBin(argv))
@@ -24,6 +25,7 @@ export function runCli(argv: string[] = process.argv): void {
     .command(blockCommand)
     .command(addCommand)
     .command(contactsCommand)
+    .command(introduceCommand)
     .command(keygenCommand)
     .command(keyNewCommand)
     .command(keyRevokeCommand)
