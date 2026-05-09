@@ -32,6 +32,8 @@ Each round:
 
 Recommended: 5 players (3 humans + 2 AIs) for best balance.
 
+All game messages are visible to the user. No data is sent without the player's explicit action.
+
 ---
 
 ## Roster Integration
@@ -231,7 +233,7 @@ Either:
 
 ## AI Mode (two-stage reasoning)
 
-基于 Cicero 两阶段架构——策略推理 → 语言生成。需设置 `ANTHROPIC_API_KEY`。
+基于 Cicero 两阶段架构——策略推理 → 语言生成。需配置 LLM API 密钥。
 
 ### AI Host（AI 裁判自动主持）
 

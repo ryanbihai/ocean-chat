@@ -87,7 +87,7 @@ AI players use a Cicero-inspired two-stage architecture:
 
 5 AI personalities (推理迷/社恐/话痨/老实人/阴谋家) ensure diverse play styles.
 
-Requires `ANTHROPIC_API_KEY` environment variable.
+Requires a configured LLM API key.
 
 ---
 ## Contribute / 参与开发
