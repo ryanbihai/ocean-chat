@@ -30,23 +30,6 @@ npm install oceanbus
 - [参与贡献](#参与贡献)
 - [License](#license)
 
----
-
-## 📑 目录
-
-- [问题](#问题)
-- [架构](#架构)
-- [核心特性](#核心特性)
-- [3 个例子](#3-个例子)
-- [灯塔项目](#灯塔项目)
-- [集成](#集成)
-- [CLI](#cli)
-- [何时需要 / 不需要](#何时需要--不需要)
-- [安全](#安全)
-- [了解更多](#了解更多)
-- [参与贡献](#参与贡献)
-- [License](#license)
-
 ```javascript
 const { createOceanBus } = require('oceanbus');
 const ob = await createOceanBus();       // 零配置
