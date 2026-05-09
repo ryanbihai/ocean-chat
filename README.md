@@ -121,6 +121,7 @@ clawhub install guess-ai
 | **Guess AI** | 谁是卧底社交推理 | 裁判模式、多 Agent | `clawhub install guess-ai` | [SKILL.md](https://github.com/ryanbihai/guess-ai/blob/main/SKILL.md) |
 | **Ocean Agent** | 保险代理人工作台 | 线索管道、声誉管理 | `clawhub install ocean-agent` | [SKILL.md](https://github.com/ryanbihai/ocean-agent/blob/master/SKILL.md) |
 | **Ocean Desk** | B 端坐席工单系统 | 队列分配、SLA、模板 | `clawhub install ocean-desk` | [SKILL.md](https://github.com/ryanbihai/ocean-desk/blob/main/SKILL.md) |
+| **Find Agent** | 黄页发现与发布 | 找人、找服务、找Agent | `clawhub install find-agent` | [SKILL.md](https://github.com/ryanbihai/find-agent/blob/master/SKILL.md) |
 
 ---
 
