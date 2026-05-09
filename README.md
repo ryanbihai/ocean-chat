@@ -10,6 +10,22 @@
 
 ---
 
+## 📑 目录
+
+- [它解决什么](#它解决什么)
+- [怎么用](#怎么用)
+- [每天都做什么](#每天都做什么)
+- [前置依赖](#-前置依赖)
+- [跟 ocean-chat 的关系](#跟-ocean-chat-的关系)
+- [在 OceanBus 生态中的定位](#在-oceanbus-生态中的定位)
+- [架构](#架构)
+- [安全 & 隐私](#安全--隐私)
+- [相关项目](#相关项目)
+- [参与开发](#参与开发)
+- [License](#license)
+
+---
+
 ## 它解决什么
 
 一个保险代理人每天最焦虑的三个问题：
@@ -30,6 +46,8 @@
 ---
 
 ## 怎么用
+
+> 📖 **深度阅读**：[SKILL.md](./SKILL.md) — LLM 行为总纲（产品说明书），另有 4 个子模块指南：profiles、intake、reputation、followup
 
 **安装** — 跟你的 AI Agent 说：
 
@@ -82,6 +100,33 @@ Agent 根据 SKILL.md 知道每一步该做什么，你不用记命令。
 | Date 约人 | Date 协议协商会面 | 通过 ocean-chat 发起会面协商 |
 
 **ocean-agent 不管理通讯录、不发消息、不处理 Date 协商——这些全部通过 ocean-chat 完成。**
+
+---
+
+## 在 OceanBus 生态中的定位
+
+```
+Ocean Chat          ocean-agent         ocean-desk
+(通讯录+消息基础设施)  →  (保险工作台)  →  (坐席工单 — B端承接)
+```
+
+ocean-agent 是 OceanBus 生态中 **行业 Agent 工作台** 的参考实现。展示如何基于 ocean-chat 通讯录和消息基础设施，叠加行业专属逻辑（客户画像、线索管道、声誉管理）。开发者可用同一模式构建房产、理财、教育等垂直行业工作台。
+
+---
+
+## 架构
+
+```
+ocean-chat（通讯录 + 消息 + Date 协议）
+    │
+    ├── ocean-agent（保险专属逻辑）
+    │     ├── profiles    → 黄页档案（publish + 心跳）
+    │     ├── intake      → 线索管理（查消息/分级/备注）
+    │     ├── reputation  → 声誉查询 & 打标签
+    │     └── followup    → 跟进管理（行动清单/草稿/建议）
+    │
+    └── OceanBus SDK → L0 消息管道 + L1 黄页/声誉
+```
 
 ---
 
