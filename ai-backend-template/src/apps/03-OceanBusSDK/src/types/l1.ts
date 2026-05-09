@@ -71,6 +71,7 @@ export interface YpEntry {
   tags: string[];
   description: string;
   summary?: string | null;
+  help_command?: string | null;
   card_hash?: string | null;
   a2a_compatible?: boolean;
   a2a_endpoint?: string | null;
@@ -86,6 +87,7 @@ export interface PublishOptions {
   tags: string[];
   description: string;
   summary?: string;
+  help_command?: string;
   card_hash?: string;
   a2a_compatible?: boolean;
   a2a_endpoint?: string;

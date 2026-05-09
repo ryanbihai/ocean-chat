@@ -383,6 +383,7 @@ export class OceanBus {
     tags: string[];
     description: string;
     summary?: string;
+    helpCommand?: string;
     card?: AgentCard;
     card_hash?: string;
     a2a_compatible?: boolean;
@@ -407,6 +408,7 @@ export class OceanBus {
       tags: options.tags,
       description: options.description,
       summary: options.summary,
+      help_command: options.helpCommand,
       card_hash: cardHash,
       a2a_compatible: options.a2a_compatible,
       a2a_endpoint: options.a2a_endpoint,

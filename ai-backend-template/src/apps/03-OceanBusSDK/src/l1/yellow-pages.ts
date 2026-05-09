@@ -302,7 +302,7 @@ export class YellowPagesClient extends L1Client {
    * Publish to Yellow Pages using the already-set identity.
    * Call ob.publish() for the one-step high-level API that handles key setup.
    */
-  async publish(options: { tags: string[]; description: string; summary?: string; card_hash?: string; a2a_compatible?: boolean; a2a_endpoint?: string; autoHeartbeat?: boolean }): Promise<L1Response> {
+  async publish(options: { tags: string[]; description: string; summary?: string; help_command?: string; card_hash?: string; a2a_compatible?: boolean; a2a_endpoint?: string; autoHeartbeat?: boolean }): Promise<L1Response> {
     const autoHeartbeat = options.autoHeartbeat !== false;
     const resolved = this.resolveIdentity();
 
@@ -315,6 +315,7 @@ export class YellowPagesClient extends L1Client {
       public_key: this.defaultPublicKey || '',
     };
     if (options.summary) payload.summary = options.summary;
+    if (options.help_command) payload.help_command = options.help_command;
     if (options.card_hash) payload.card_hash = options.card_hash;
     if (options.a2a_compatible !== undefined) payload.a2a_compatible = options.a2a_compatible;
     if (options.a2a_endpoint) payload.a2a_endpoint = options.a2a_endpoint;
