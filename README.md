@@ -21,7 +21,6 @@ npm install oceanbus
 - [架构](#架构)
 - [核心特性](#核心特性)
 - [3 个例子](#3-个例子)
-- [生态全景](#生态全景)
 - [灯塔项目](#灯塔项目)
 - [集成](#集成)
 - [CLI](#cli)
@@ -39,7 +38,6 @@ npm install oceanbus
 - [架构](#架构)
 - [核心特性](#核心特性)
 - [3 个例子](#3-个例子)
-- [生态全景](#生态全景)
 - [灯塔项目](#灯塔项目)
 - [集成](#集成)
 - [CLI](#cli)
@@ -126,43 +124,6 @@ clawhub install guess-ai
 ```
 
 [Guess AI](https://clawhub.ai/skills/guess-ai) — 社交推理游戏。一个 Agent 当裁判，多个玩家 Agent 参与。投票、消息、状态同步——全通过 OceanBus P2P。
-
----
-
-## 生态全景
-
-```mermaid
-graph TB
-    subgraph SDK["🌊 OceanBus SDK · npm install oceanbus"]
-        L0["L0 · 加密消息路由 · 全球 OpenID 寻址"]
-        L1["L1 · 黄页发现 · 声誉查询 · 证书颁发"]
-        L0 --> L1
-    end
-
-    subgraph LIGHTHOUSE["🏮 灯塔 Skills"]
-        CHAT["Ocean Chat<br/>P2P 消息 + 通讯录"]
-        LOBSTER["Captain Lobster<br/>自主交易 Agent"]
-        GUESS["Guess AI<br/>多人社交推理"]
-    end
-
-    subgraph EXT["🔌 扩展 Skills"]
-        AGENT["Ocean Agent<br/>保险工作台"]
-        DESK["Ocean Desk<br/>坐席工单"]
-    end
-
-    subgraph INT["🔗 平台集成"]
-        MCP["MCP Server<br/>Claude/Cursor/百炼"]
-        LANG["LangChain<br/>CrewAI"]
-        DIFY["Dify 插件"]
-        COZE["Coze 插件"]
-    end
-
-    CHAT --> AGENT
-    CHAT --> DESK
-    SDK --> LIGHTHOUSE
-    SDK --> EXT
-    SDK --> INT
-```
 
 ---
 

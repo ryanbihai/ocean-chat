@@ -9,7 +9,7 @@
 本模板适用于 OceanBus 生态下所有 skill 的 `README.md`（GitHub 展示用）。每次新增或更新 skill 时，按本模板结构组织内容。
 
 **与 SKILL.md 的分工**：
-- **README.md**：给人类开发者看 — 徽章、安装、用法、架构、生态定位
+- **README.md**：给人类开发者看 — 徽章、安装、用法、架构
 - **SKILL.md**：给 AI Agent 看 — 行为指南、决策树、协议 Schema、命令速查
 
 README 必须包含指向 SKILL.md 的"深度阅读"链接。
@@ -97,15 +97,6 @@ graph TB
 
 ---
 
-## 在 OceanBus 生态中的定位
-
-```
-[入门 Skill]  →  [进阶 Skill]  →  [高阶 Skill]
-(定位说明)       (定位说明)       (定位说明)
-```
-
----
-
 ## 本地测试
 
 ```bash
@@ -158,7 +149,6 @@ node -e "require('./src/index.js')({action:'ping'}).then(r=>console.log(r))"
 | 这是什么 | 2-3 句 + 配图 | 写成产品说明书 |
 | 快速开始 | 复制粘贴可执行，3 步以内 | 步骤超过 5 步 |
 | 能力一览 | 用表格 | 用段落描述功能 |
-| 生态定位 | 定位链（入门→进阶→高阶） | 不说明与其他 skill 的关系 |
 | 安全 | 至少 2 条 | 空着不写 |
 | 参与贡献 | GitHub + 可参与方向 + SKILL.md 链接 | 没有 SKILL.md 链接 |
 
