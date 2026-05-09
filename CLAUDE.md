@@ -188,7 +188,52 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
    → curl http://127.0.0.1:17019/api/<appid>/healthcheck
 ```
 
-### 5.5 执行原则
+### 5.5 批量发布：所有有更新的 Skill
+
+**触发词**：`发布所有有更新的到所有平台`、`发布所有变更`、`批量发布 skill`
+
+**执行流程**：
+
+```
+1. 检测变更
+   → 对每个 skill: git log --oneline origin/master..HEAD -- skills/<slug>/
+   → 也检查未提交的本地变更: git status -- skills/<slug>/
+   → 输出变更清单：
+
+   检测到以下 Skill 有变更：
+     ocean-chat      2 个 commit — 上次版本 v2.9.2
+     captain-lobster  1 个 commit — 上次版本 v1.4.1
+     ocean-agent      无变更 — 跳过
+
+2. 询问版本号（只问一次）
+   → 对每个有变更的 skill，列出最近 commit 摘要
+   → 逐一询问新版本号（给出 patch 建议作为默认值）
+   → 格式：
+     "ocean-chat (当前 v2.9.2):
+        - fix: Roster 重复检测 OpenID 比对遗漏
+        - feat: 增加快捷回复模板
+      建议 bump 到 v2.10.0 (minor, 因为有 feat)
+      新版本号？[输入 / v2.10.0 回车确认 / 手工输入]"
+
+3. 逐一发布（用户确认后逐个执行流程 A）
+   → 发布完一个，验证通过，再发布下一个
+   → 任何一个失败 → 停止，报告已完成和失败的，让用户决定是否继续
+
+4. 汇总报告
+   → 已发布: ocean-chat v2.10.0 ✅, captain-lobster v1.5.0 ✅
+   → 失败: guess-ai v2.2.0 ❌ (ClawHub rate limit)
+   → 跳过: ocean-agent (无变更)
+```
+
+**版本号默认规则**（给用户的建议）：
+- commit 含 `fix:` → patch bump（v1.2.3 → v1.2.4）
+- commit 含 `feat:` → minor bump（v1.2.3 → v1.3.0）
+- commit 含 `BREAKING` 或大规模重写 → major bump（v1.2.3 → v2.0.0）
+- 多个 commit，取最高级别
+
+如果用户说 "发布所有有更新的" 并在同一句话里指定了版本号（如 "全部 bump patch"），则跳过步骤 2，直接对每个有变更的 skill 执行 patch bump。
+
+### 5.6 执行原则
 
 - **不跳步**：GitHub → tag → ClawHub 的顺序不可改变。ClawHub 依赖 GitHub 上的 SKILL.md，颠倒顺序会被拒。
 - **先检查后操作**：每次发布前必须确认版本号大于线上。不确定时先 `clawhub inspect` 或 `npm view`。
