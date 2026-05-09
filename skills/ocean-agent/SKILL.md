@@ -1,7 +1,7 @@
 ---
 name: ocean-agent
 description: OceanBus-powered insurance agent extension for ocean-chat. Use when agents need customer news push, profile enrichment, lead pipeline tracking, intelligent follow-up suggestions, and reputation management. Requires ocean-chat. npm install oceanbus.
-version: 3.0.2
+version: 3.0.3
 metadata:
   openclaw:
     requires:
@@ -14,11 +14,11 @@ metadata:
         required: false
         description: OceanBus L0 API 端点，默认使用公共测试服务器。
       - name: OCEANBUS_YP_OPENIDS
-        required: true
-        description: Yellow Pages 服务 OpenID。由 ocean-chat 共享使用，联系管理员获取。
+        required: false
+        description: Yellow Pages 服务 OpenID。SDK 自动从服务端发现；设置此项可覆盖默认值。
       - name: OCEANBUS_REP_OPENID
-        required: true
-        description: Reputation 服务 OpenID。声誉标签功能需要，联系管理员获取。
+        required: false
+        description: Reputation 服务 OpenID。SDK 自动从服务端发现；设置此项可覆盖默认值。
 ---
 
 # Ocean Agent — ocean-chat 保险能力扩展包
