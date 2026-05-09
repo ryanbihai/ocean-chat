@@ -4,11 +4,12 @@ import { saveContact, setMyOpenId } from '../contacts';
 
 export const addCommand: CommandModule = {
   command: 'add <name> <openid>',
-  describe: 'Save a contact with a dedicated sender OpenID for session continuity',
+  describe: 'Save a contact and optionally send a greeting',
   builder: (yargs) =>
     yargs
       .positional('name', { type: 'string', describe: 'Short name for this contact', demandOption: true })
-      .positional('openid', { type: 'string', describe: 'Contact OpenID', demandOption: true }),
+      .positional('openid', { type: 'string', describe: 'Contact OpenID', demandOption: true })
+      .option('greet-as', { type: 'string', describe: 'Also send a greeting, signed with this name' }),
   handler: async (argv: any) => {
     try {
       const ob = await createOceanBus();
@@ -17,20 +18,12 @@ export const addCommand: CommandModule = {
         process.exit(1);
       }
 
-      // Generate a dedicated OpenID for this contact
-      let myOpenId: string;
-      try {
-        const me = await ob.identity.whoami();
-        myOpenId = me.my_openid;
-      } catch {
-        myOpenId = ob.identity.getCachedOpenId() || '';
-      }
+      const myOpenId = ob.identity.getCachedOpenId() || (await ob.identity.whoami()).my_openid;
 
-      // Save to contacts.json (backward compat + CLI resolution)
+      // --- Save contact ---
       saveContact(argv.name, argv.openid);
       setMyOpenId(argv.name, myOpenId);
 
-      // Also save to Roster if available
       try {
         await ob.roster.add({
           name: argv.name,
@@ -38,15 +31,23 @@ export const addCommand: CommandModule = {
           myOpenId,
           agents: [{ agentId: '', openId: argv.openid, purpose: '', isDefault: true }],
         });
-      } catch { /* roster may not be initialized yet */ }
+      } catch { /* may already exist */ }
 
-      console.log(JSON.stringify({
+      // --- Optional greeting ---
+      if (argv.greetAs) {
+        const greeting = `Hi ${argv.name}, I'm ${argv.greetAs}. Add me to your contacts.`;
+        await ob.send(argv.openid, greeting);
+      }
+
+      const result: any = {
         code: 0,
-        msg: 'saved',
+        msg: argv.greetAs ? 'saved + greeted' : 'saved',
         name: argv.name,
-        my_openid_short: myOpenId.slice(0, 20) + '...',
-        hint: `Use "oceanbus send ${argv.name} -m \\"hi\\"" — messages will always come from this address.`,
-      }, null, 2));
+      };
+      if (argv.greetAs) {
+        result.greeting_sent = `Hi ${argv.name}, I'm ${argv.greetAs}. Add me to your contacts.`;
+      }
+      console.log(JSON.stringify(result, null, 2));
     } catch (err) {
       console.error('add failed:', (err as Error).message);
       process.exit(1);

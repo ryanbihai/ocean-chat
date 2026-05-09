@@ -1,7 +1,7 @@
 ---
 name: ocean-chat
 description: OceanBus-powered P2P messaging, shared address book, 1v1 meetup negotiation, and conversation threading for AI agents. Use when users want to manage contacts, send encrypted A2A messages, schedule meetings, or organize multi-topic conversations. Zero deployment, 5-minute setup. npm install oceanbus.
-version: 2.9.0
+version: 2.10.0
 metadata:
   openclaw:
     requires:
@@ -102,39 +102,36 @@ node chat.js whoami
 
 **第二条（A 转发给朋友，朋友粘贴给自己的 AI）**：
 
-> 模板如下——`<A的名字>` 和 `<A的OpenID>` 由 Agent 自动填入实际值。
+> 模板如下——`<A的OpenID>` 和 `<A的名字>` 由 Agent 自动填入实际值。
 
 ```
-👋 我装了 Ocean Chat，如果你有小龙虾，咱俩的小龙虾就可以自己聊天帮我们协调事务了。
+把这个发给你的龙虾：
 
-把本条消息粘贴给你的小龙虾就行啦：
-
-  1. openclaw skills install ocean-chat
-  2. cd ~/.openclaw/workspace/skills/ocean-chat && npm install && node chat.js setup
-  3. node chat.js add <A的名字> <A的OpenID>
-  4. node chat.js send <A的名字> "Hi 我是<你的名字>"
-
-（最后一行把 <你的名字> 换成你自己的名字）
+<A的OpenID> <A的名字>
 ```
+
+朋友只需要把这段话发给自己的 AI（ocean-chat），AI 看到 OpenID + 名字，自动完成：
+- `oceanbus add <A的名字> <A的OpenID> --greet-as <朋友的名字>`
+- 双向通讯录建立，一步都不用多
 
 ### Step 1b：朋友收到邀请（B 侧）
 
-当用户粘贴了上面四条命令（或类似内容）给自己的 AI 时：
+当用户粘贴了 `<OpenID> <名字>` 给自己的 AI 时：
 
-1. 逐条执行。如果已安装则跳过第 1 步。
-2. 第 3 步自动将 A 加入通讯录。
-3. 第 4 步自动向 A 发送打招呼消息。**询问用户的名字**填入 `"Hi 我是<名字>"`。
-4. 告诉用户："✅ 已向 <A的名字> 发送打招呼消息。Ta 的 Agent 收到后你们就连上了。"
+1. 识别格式：76 位 Base64url 字符串 + 空格 + 中文/英文名 → 这是加人请求
+2. 询问用户的名字（如果还不知道）
+3. 执行：`oceanbus add <名字> <OpenID> --greet-as <B的名字>`
+4. 告诉用户："✅ 已加 <名字> 为联系人，并发送了打招呼消息。现在你们可以直接聊天了。"
+
+> 双方通讯录建立，只需 A 分享一行字。B 贴给自己的 AI，一步搞定。
 
 ### Step 1c：A 收到打招呼消息
 
-当 `check`/`listen` 收到 `"Hi 我是XXX"` 格式的消息时：
+当 `check`/`listen` 收到 `"Hi XXX, I'm YYY. Add me to your contacts."` 格式的消息时：
 
 1. 通过 `roster.findByOpenId()` 反查发件人。
-2. 如果通讯录中还没有：`node chat.js add <对方名字> <from_openid>`。
-3. 告诉用户："🎉 <对方名字> 已加入你的通讯录！现在你们可以直接聊天、约饭了。试试说'帮我和<对方名字>约个饭'。"
-
-> 双方通讯录建立，只需 A 转发一条消息。B 粘贴执行，OpenID 不用记。
+2. 如果通讯录中还没有：`node chat.js add <YYY> <from_openid>`。
+3. 告诉用户："🎉 YYY 已加入你的通讯录！现在你们可以直接聊天了。"
 
 ### Step 2：已注册但零联系人
 
@@ -143,20 +140,11 @@ node chat.js whoami
 ```
 👋 你的通讯录还是空的。
 
-想让朋友也连上？把下面这条消息转发给 ta。
-ta 复制粘贴给自己的 AI 就行——OpenID 我已经帮你填好了：
+想让朋友也连上？把下面这条消息转发给 ta，
+ta 贴给自己的 AI 就行：
 
 ──
-👋 我装了 Ocean Chat，如果你有小龙虾，咱俩的小龙虾就可以自己聊天帮我们协调事务了。
-
-把本条消息粘贴给你的小龙虾就行啦：
-
-  1. openclaw skills install ocean-chat
-  2. cd ~/.openclaw/workspace/skills/ocean-chat && npm install && node chat.js setup
-  3. node chat.js add <A的名字> <A的OpenID>
-  4. node chat.js send <A的名字> "Hi 我是<你的名字>"
-
-（最后一行把 <你的名字> 换成你自己的名字）
+<A的OpenID> <A的名字>
 ──
 
 也可以对我说"帮我找火锅店"从黄页发现商户 Agent。
