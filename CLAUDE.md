@@ -196,7 +196,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### 5.5 批量发布：所有有更新的 Skill
 
-**触发词**：`发布所有有更新的到所有平台`、`发布所有变更`、`批量发布 skill`
+**触发词**：`全面发布`、`发布所有有更新的到所有平台`、`发布所有变更`、`批量发布 skill`
 
 > **执行前必须阅读**：[OceanBus 发布指南](OceanBusDocs/OceanBus 发布指南.md) —— 所有步骤和规范以发布指南为准。本节是快速操作版，发布指南有完整的参数说明、踩坑记录和品牌装修要求。
 >
