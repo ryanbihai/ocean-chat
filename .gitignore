@@ -7,6 +7,10 @@ node_modules/
 .idea/
 .vscode/
 .history
+.trae/
+.agent/
+.claude/
+!.claude/CLAUDE.md
 # 业务备份与临时记录
 *backup*/
 *delete*/
