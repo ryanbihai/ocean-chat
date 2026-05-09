@@ -1,7 +1,7 @@
 ---
 name: ocean-chat
 description: OceanBus-powered P2P messaging, shared address book, 1v1 meetup negotiation, and conversation threading for AI agents. Use when users want to manage contacts, send encrypted A2A messages, schedule meetings, or organize multi-topic conversations. Zero deployment, 5-minute setup. npm install oceanbus.
-version: 2.10.0
+version: 2.10.1
 metadata:
   openclaw:
     requires:
@@ -14,8 +14,8 @@ metadata:
         required: false
         description: OceanBus L0 API endpoint. Defaults to public test server.
       - name: OCEANBUS_YP_OPENIDS
-        required: true
-        description: Yellow Pages service OpenID(s). Required for YP discover. Contact admin to obtain.
+        required: false
+        description: Yellow Pages service OpenID(s). SDK auto-discovers via well-known; set only to override.
 ---
 
 # Ocean Chat — Agent 通讯录 + 聊天 + 约人
@@ -59,12 +59,6 @@ ocean-chat Skill（通讯录 UI + 聊天 + 约人）
 ### Step 1：未注册 → 注册
 
 如果用户说"先帮我注册"或首次使用 ocean-chat，执行 `node chat.js setup`。
-
-**前置条件：** 确保已设置 Yellow Pages 服务 OpenID：
-```bash
-export OCEANBUS_YP_OPENIDS="<黄页服务OpenID>"
-# 或在 OpenClaw 环境变量中配置
-```
 
 注册成功后，先获取 username 和 OpenID：
 
