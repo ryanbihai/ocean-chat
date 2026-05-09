@@ -1,0 +1,57 @@
+{
+  "name": "oceanbus-mcp-server",
+  "version": "0.1.3",
+  "description": "MCP server that gives Claude Desktop, Cursor, and any MCP client the ability to register, discover, message, and transact with other AI agents on the OceanBus network — no server required.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "oceanbus-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "oceanbus": "^0.2.5",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  },
+  "keywords": [
+    "oceanbus",
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "agent-to-agent",
+    "ai-agent",
+    "communication",
+    "messaging",
+    "e2ee",
+    "claude-desktop",
+    "cursor",
+    "yellow-pages",
+    "service-discovery",
+    "reputation"
+  ],
+  "homepage": "https://github.com/oceanbus/oceanbus#readme",
+  "bugs": {
+    "url": "https://github.com/oceanbus/oceanbus/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oceanbus/oceanbus"
+  },
+  "license": "MIT",
+  "author": "OceanBus"
+}

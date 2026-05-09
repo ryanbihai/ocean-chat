@@ -1,0 +1,58 @@
+{
+  "ownerId": "kn75dvek1dkfz0r0xwdp4xtc2983qg44",
+  "slug": "health-checkup-recommender",
+  "version": "4.5.0",
+  "description": "AI 智能健康体检推荐服务。严格依据《国家卫建委成人体检指引（2025版）》、BMJ及国家癌症中心最新流行病学数据，为您提供具有权威循证医学支撑的个性化体检方案。覆盖全国220城市数百家体检机构预约。二维码预约需用户明确同意。",
+  "publishedAt": 1775280000000,
+  "namespace": "ryanbihai",
+  "homepage": "https://www.ihaola.com.cn",
+  "dependencies": {
+    "npm": ["qrcode"],
+    "node": [">=18.0.0"]
+  },
+  "install": "npm ci",
+  "permissions": {
+    "network": ["https://*.ihaola.com.cn", "http://*.ihaola.com.cn"],
+    "filesystem": ["write"]
+  },
+  "changelog": "v4.5.0: 安全合规升级，清理遗留 Python 依赖并锁定 npm ci 安装；SKILL.md 补充网络透明度声明；sync_items.js 和 generate_qr.js 强制要求 --consent=true 授权拦截\nv4.4.0: Bug 修复\nv4.3.7: 修复 SKILL.md 声明不一致（移除不存在的 FALLBACK_MECHANISM.md，更新示例格式）\nv4.3.6: 修复环境判断逻辑，确保默认使用生产环境（www.ihaola.com.cn）\nv4.3.5: 修复 HaoLa47/48 冲突检测错误",
+  "tags": [
+    "健康体检",
+    "体检推荐",
+    "体检套餐",
+    "健康检查",
+    "年度体检",
+    "健康监测",
+    "体检项目",
+    "医院体检",
+    "预防保健",
+    "health checkup",
+    "medical checkup",
+    "health examination",
+    "中文体检",
+    "个性化体检",
+    "体检预约",
+    "健康管家",
+    "我要体检",
+    "想做体检",
+    "需要体检",
+    "全身体检",
+    "定制体检",
+    "体检建议",
+    "帮我推荐体检",
+    "身体检查"
+  ],
+  "security": {
+    "qr_auto_send": false,
+    "user_consent_required": true,
+    "third_party_booking": "www.ihaola.com.cn",
+    "qr_contains_personal_data": false,
+    "qr_fields": [],
+    "data_flow": "qr_contains_only_readable_booking_reference_no_pii",
+    "config_paths_read": [],
+    "runtime_deps": [
+      "npm:qrcode",
+      "node:>=18.0.0"
+    ]
+  }
+}

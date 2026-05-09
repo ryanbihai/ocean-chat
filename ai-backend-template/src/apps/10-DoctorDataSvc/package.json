@@ -1,0 +1,8 @@
+{
+  "name": "doctor-data-svc",
+  "private": true,
+  "description": "OceanBus Yellow Pages service — doctor data with 1601 specialists across 7 cities",
+  "dependencies": {
+    "oceanbus": "^0.4.0"
+  }
+}

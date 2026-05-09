@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OceanBus 数据看板</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 8px; color: #f0f6fc; }
+  .subtitle { font-size: 13px; color: #8b949e; margin-bottom: 24px; }
+  .config-bar {
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 16px; margin-bottom: 24px;
+  }
+  .config-field { display: flex; flex-direction: column; gap: 4px; }
+  .config-field label { font-size: 12px; color: #8b949e; }
+  .config-field input {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    color: #c9d1d9; padding: 6px 10px; font-size: 13px; width: 280px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .config-field input:focus { outline: none; border-color: #58a6ff; }
+  button {
+    background: #238636; border: 1px solid #2ea043; color: #fff;
+    border-radius: 6px; padding: 7px 16px; font-size: 13px; cursor: pointer;
+    font-weight: 500; white-space: nowrap;
+  }
+  button:hover { background: #2ea043; }
+  button:active { background: #238636; }
+  button.secondary { background: #21262d; border-color: #30363d; color: #c9d1d9; }
+  button.secondary:hover { background: #30363d; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px; }
+  .card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 14px 18px; border-bottom: 1px solid #30363d;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .card-header h2 { font-size: 15px; font-weight: 600; color: #f0f6fc; }
+  .card-header .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 12px;
+    background: #1f6feb22; color: #58a6ff; border: 1px solid #1f6feb44;
+  }
+  .card-body { padding: 14px 18px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 4px; font-size: 13px; }
+  th { color: #8b949e; font-weight: 500; border-bottom: 1px solid #21262d; }
+  td { border-bottom: 1px solid #0d1117; }
+  tr:last-child td { border-bottom: none; }
+  .value { font-variant-numeric: tabular-nums; font-weight: 600; color: #f0f6fc; }
+  .value.highlight { color: #7ee787; }
+  .muted { color: #8b949e; font-size: 12px; }
+  .error { color: #f85149; font-size: 12px; }
+  .loading { color: #8b949e; font-size: 13px; }
+  .last-updated { font-size: 12px; color: #484f58; margin-top: 20px; text-align: right; }
+
+  .stat-row { display: flex; gap: 32px; margin-bottom: 12px; }
+  .stat-num { font-size: 28px; font-weight: 700; color: #7ee787; }
+  .stat-lbl { font-size: 11px; color: #8b949e; margin-top: 2px; }
+
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .bar-row .day { font-size: 11px; color: #8b949e; width: 50px; text-align: right; flex-shrink: 0; }
+  .bar-row .bar-fill {
+    height: 18px; border-radius: 3px; background: linear-gradient(90deg, #1f6feb, #58a6ff);
+    min-width: 2px; transition: width 0.3s ease;
+    display: flex; align-items: center; padding-left: 6px;
+    font-size: 11px; color: #fff; white-space: nowrap;
+  }
+  .repo-section { margin-bottom: 20px; }
+  .repo-section h3 { font-size: 14px; font-weight: 600; color: #f0f6fc; margin-bottom: 8px; }
+
+  .platform-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid #0d1117; }
+  .platform-row:last-child { border-bottom: none; }
+  .platform-name { font-weight: 600; color: #f0f6fc; min-width: 80px; }
+  .platform-status { font-size: 12px; padding: 2px 10px; border-radius: 10px; }
+  .status-live { background: #2ea04322; color: #7ee787; border: 1px solid #2ea04344; }
+  .status-pending { background: #f39c1222; color: #f39c12; border: 1px solid #f39c1244; }
+  .status-guide { background: #1f6feb22; color: #58a6ff; border: 1px solid #1f6feb44; }
+  .platform-detail { font-size: 11px; color: #8b949e; }
+</style>
+</head>
+<body>
+
+<h1>OceanBus 数据看板</h1>
+<p class="subtitle">ClawHub · GitHub · npm · Coze · MCP 五端数据聚合</p>
+
+<div class="config-bar">
+  <div class="config-field">
+    <label>GitHub Token（需要 repo scope）</label>
+    <input type="password" id="ghToken" placeholder="ghp_xxx 或 gho_xxx">
+  </div>
+  <div class="config-field">
+    <label>ClawHub Token</label>
+    <input type="password" id="chToken" placeholder="clh_xxx">
+  </div>
+  <div class="config-field">
+    <label>OceanBus API Key（运营数据）</label>
+    <input type="password" id="obToken" placeholder="sk_live_xxx">
+  </div>
+  <button onclick="saveTokens()">保存</button>
+  <button class="secondary" onclick="refreshAll()">刷新全部</button>
+</div>
+
+<div class="grid">
+  <!-- ClawHub -->
+  <div class="card" id="clawhub-card">
+    <div class="card-header">
+      <h2>ClawHub 下载量</h2>
+      <span class="badge">clawhub.ai</span>
+    </div>
+    <div class="card-body" id="clawhub-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+
+  <!-- GitHub -->
+  <div class="card" id="github-card">
+    <div class="card-header">
+      <h2>GitHub Clone 数量</h2>
+      <span class="badge">累计 / 近5日</span>
+    </div>
+    <div class="card-body" id="github-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+
+  <!-- npm -->
+  <div class="card" id="npm-card">
+    <div class="card-header">
+      <h2>npm 安装量</h2>
+      <span class="badge">累计 / 近7日</span>
+    </div>
+    <div class="card-body" id="npm-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+
+  <!-- 插件调用 (Dify + Coze) -->
+  <div class="card" id="plugin-card">
+    <div class="card-header">
+      <h2>插件调用 (Dify + Coze)</h2>
+      <span class="badge">L1Proxy / L0</span>
+    </div>
+    <div class="card-body" id="dify-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+
+  <!-- OceanBus 网络 -->
+  <div class="card" id="network-card">
+    <div class="card-header">
+      <h2>OceanBus 网络</h2>
+      <span class="badge">黄页 · 交易 · 玩家</span>
+    </div>
+    <div class="card-body" id="network-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+
+  <!-- OceanBus 消息流量 -->
+  <div class="card" id="traffic-card">
+    <div class="card-header">
+      <h2>OceanBus 消息流量</h2>
+      <span class="badge">每日消息 / Agent</span>
+    </div>
+    <div class="card-body" id="traffic-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+
+  <!-- MCP 使用量 -->
+          <div class="card" id="mcp-card">
+            <div class="card-header">
+              <h2>MCP 使用量</h2>
+              <span class="badge">遥测上报</span>
+            </div>
+            <div class="card-body" id="mcp-body">
+              <p class="loading">加载中...</p>
+            </div>
+          </div>
+
+          <!-- 平台分布 -->
+  <div class="card" id="platform-card">
+    <div class="card-header">
+      <h2>平台分布</h2>
+      <span class="badge">6 渠道</span>
+    </div>
+    <div class="card-body" id="platform-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+</div>
+
+<p class="last-updated" id="lastUpdated"></p>
+
+<script>
+// --- Config ---
+const CLAWHUB_SKILLS = [
+  'health-checkup-recommender',
+  'captain-lobster',
+  'china-top-doctor-referral',
+  'my-companion',
+  'chinese-interest-rate',
+  'ocean-chat',
+  'ocean-agent',
+  'guess-ai',
+  'ocean-desk',
+];
+const GITHUB_REPOS = [
+  { owner: 'ryanbihai', repo: 'ocean-chat', label: 'ocean-chat' },
+  { owner: 'ryanbihai', repo: 'ocean-agent', label: 'ocean-agent' },
+  { owner: 'ryanbihai', repo: 'captain-lobster', label: 'captain-lobster' },
+  { owner: 'ryanbihai', repo: 'health-checkup-recommender', label: 'health-checkup-recommender' },
+  { owner: 'ryanbihai', repo: 'guess-ai', label: 'guess-ai' },
+  { owner: 'ryanbihai', repo: 'ocean-desk', label: 'ocean-desk' },
+];
+const NPM_PACKAGES = ['oceanbus', 'oceanbus-mcp-server', 'oceanbus-langchain'];
+const GH_DAYS = 5;
+const PUBLIC_API = 'http://39.106.168.88:17019/api/public';
+
+// --- Token Management ---
+function getTokens() {
+  return {
+    gh: document.getElementById('ghToken').value || localStorage.getItem('gh_token') || '',
+    ch: document.getElementById('chToken').value || localStorage.getItem('ch_token') || '',
+    ob: document.getElementById('obToken').value || localStorage.getItem('ob_token') || '',
+  };
+}
+
+function saveTokens() {
+  const gh = document.getElementById('ghToken').value;
+  const ch = document.getElementById('chToken').value;
+  const ob = document.getElementById('obToken').value;
+  if (gh) localStorage.setItem('gh_token', gh);
+  if (ch) localStorage.setItem('ch_token', ch);
+  if (ob) localStorage.setItem('ob_token', ob);
+  refreshAll();
+}
+
+function loadTokens() {
+  const gh = localStorage.getItem('gh_token') || '';
+  const ch = localStorage.getItem('ch_token') || '';
+  const ob = localStorage.getItem('ob_token') || '';
+  document.getElementById('ghToken').value = gh;
+  document.getElementById('chToken').value = ch;
+  document.getElementById('obToken').value = ob;
+}
+
+// --- API Helpers ---
+async function fetchClawHub(slug, token) {
+  const res = await fetch(`https://clawhub.ai/api/v1/skills/${slug}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return { stats: data.skill.stats, displayName: data.skill.displayName };
+}
+
+async function fetchGitHubClones(owner, repo, token) {
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/traffic/clones`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchNpmDownloads(pkg) {
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - 6);
+  const endStr = end.toISOString().slice(0, 10);
+  const startStr = start.toISOString().slice(0, 10);
+
+  const res = await fetch(
+    `https://api.npmjs.org/downloads/range/${startStr}:${endStr}/${pkg}`
+  );
+  if (res.status === 404) {
+    const downloads = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      downloads.push({ day: d.toISOString().slice(0, 10), downloads: 0 });
+    }
+    return { start: startStr, end: endStr, package: pkg, downloads };
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchNetworkStats() {
+  const res = await fetch(`${PUBLIC_API}/stats`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchNetworkGrowth(token) {
+  if (!token) return null;
+  const L0 = 'https://ai-t.ihaola.com.cn/api/l0';
+  const h = { Authorization: `Bearer ${token}` };
+  const [r1, r2, r3] = await Promise.allSettled([
+    fetch(`${L0}/internal/dashboard/registrations?period=day`, { headers: h }),
+    fetch(`${L0}/internal/dashboard/activity?period=day`, { headers: h }),
+    fetch(`${L0}/internal/dashboard/messages?period=day`, { headers: h }),
+  ]);
+  return {
+    registrations: r1.status === 'fulfilled' && r1.value.ok ? (await r1.value.json()).data || [] : [],
+    activity: r2.status === 'fulfilled' && r2.value.ok ? (await r2.value.json()).data || [] : [],
+    messages: r3.status === 'fulfilled' && r3.value.ok ? (await r3.value.json()).data || [] : [],
+  };
+}
+
+async function fetchPlatformStatus() {
+  const results = [];
+  // Dify PR
+  try {
+    const prRes = await fetch('https://api.github.com/repos/langgenius/dify-plugins/pulls/2369');
+    if (prRes.ok) {
+      const pr = await prRes.json();
+      results.push({
+        name: 'Dify',
+        status: pr.state === 'open' ? 'pending' : 'live',
+        detail: `PR #2369 ${pr.state === 'open' ? '审核中' : pr.merged ? '已合并' : pr.state}`,
+        url: 'https://github.com/langgenius/dify-plugins/pull/2369',
+        tools: 7
+      });
+    }
+  } catch (e) { results.push({ name: 'Dify', status: 'pending', detail: 'PR #2369', tools: 7 }); }
+
+  // Coze
+  results.push({ name: 'Coze', status: 'live', detail: '已发布 · 4 工具', tools: 4 });
+
+  // MCP Registry
+  try {
+    const mcpRes = await fetch('https://registry.modelcontextprotocol.io/v0.1/servers?search=oceanbus');
+    if (mcpRes.ok) {
+      const mcpData = await mcpRes.json();
+      if (mcpData.servers && mcpData.servers.length > 0) {
+        const s = mcpData.servers[0].server;
+        results.push({
+          name: 'MCP Registry',
+          status: 'live',
+          detail: `v${s.version} · 官方注册表`,
+          url: `https://registry.modelcontextprotocol.io/v0.1/servers?search=oceanbus`,
+          tools: 7
+        });
+      } else {
+        results.push({ name: 'MCP Registry', status: 'pending', detail: '提交中...', tools: 7 });
+      }
+    }
+  } catch (e) { results.push({ name: 'MCP Registry', status: 'pending', detail: 'v0.1.5 已发布' }); }
+
+  // 百炼
+  results.push({ name: '百炼', status: 'guide', detail: 'MCP 接入指南', tools: 7 });
+
+  return results;
+}
+
+// --- Render ---
+function maxVal(arr, fn) {
+  return Math.max(...arr.map(fn), 1);
+}
+
+function barChart(days, getDay, getVal, peakOverride) {
+  const peak = peakOverride ?? maxVal(days, getVal);
+  let html = '';
+  for (const d of days) {
+    const day = getDay(d);
+    const val = getVal(d);
+    const pct = peak > 0 ? (val / peak * 100) : 0;
+    html += `<div class="bar-row">
+      <span class="day">${day}</span>
+      <div style="flex:1;background:#21262d;border-radius:3px;overflow:hidden">
+        <div class="bar-fill" style="width:${pct}%">${val || ''}</div>
+      </div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderClawHub(results) {
+  const body = document.getElementById('clawhub-body');
+  if (results.errors.length === CLAWHUB_SKILLS.length) {
+    body.innerHTML = `<p class="error">全部请求失败。请检查 Token 是否正确。</p>`;
+    return;
+  }
+  const sorted = [...results.data].sort((a, b) => b.stats.downloads - a.stats.downloads);
+  let html = `<table>
+    <thead><tr><th>Skill</th><th>下载量</th><th>Stars</th><th>版本数</th></tr></thead><tbody>`;
+  for (const r of sorted) {
+    html += `<tr>
+      <td class="value">${r.displayName}</td>
+      <td class="value highlight">${r.stats.downloads.toLocaleString()}</td>
+      <td>${r.stats.stars}</td>
+      <td>${r.stats.versions}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  if (results.errors.length) {
+    html += `<p class="error" style="margin-top:8px">部分失败: ${results.errors.join(', ')}</p>`;
+  }
+  body.innerHTML = html;
+}
+
+function padDaily(apiDays, numDays) {
+  const map = {};
+  for (const d of apiDays) map[d.timestamp.slice(0, 10)] = d.count;
+  const days = [];
+  const now = new Date();
+  for (let i = numDays - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    days.push({ timestamp: key, count: map[key] || 0 });
+  }
+  return days;
+}
+
+function renderGitHub(results) {
+  const body = document.getElementById('github-body');
+  if (results.errors.length === GITHUB_REPOS.length) {
+    body.innerHTML = `<p class="error">全部请求失败。请检查 Token 是否有 repo 权限。</p>`;
+    return;
+  }
+  const sorted = [...results.data].sort((a, b) => b.clones.count - a.clones.count);
+  const padded = sorted.map(r => padDaily(r.clones.clones, GH_DAYS));
+  const globalPeak = maxVal(padded, days => maxVal(days, c => c.count));
+  let html = '';
+  for (let i = 0; i < sorted.length; i++) {
+    const r = sorted[i];
+    const recent = padded[i];
+    html += `<div class="repo-section">
+      <h3>${r.label}</h3>
+      <div class="stat-row">
+        <div><div class="stat-num">${r.clones.count.toLocaleString()}</div><div class="stat-lbl">总 Clone</div></div>
+        <div><div class="stat-num">${r.clones.uniques.toLocaleString()}</div><div class="stat-lbl">独立访客</div></div>
+      </div>`;
+    html += barChart(recent, c => c.timestamp.slice(5, 10), c => c.count, globalPeak);
+    html += '</div>';
+  }
+  if (results.errors.length) {
+    html += `<p class="error">部分失败: ${results.errors.join(', ')}</p>`;
+  }
+  body.innerHTML = html;
+}
+
+function renderNpm(results) {
+  const body = document.getElementById('npm-body');
+  if (results.errors.length === NPM_PACKAGES.length) {
+    body.innerHTML = `<p class="error">全部请求失败。npm API 可能暂时不可用。</p>`;
+    return;
+  }
+  const sorted = [...results.data].sort((a, b) => {
+    const totalA = a.data.downloads.reduce((x, y) => x + y.downloads, 0);
+    const totalB = b.data.downloads.reduce((x, y) => x + y.downloads, 0);
+    return totalB - totalA;
+  });
+  const globalPeak = maxVal(sorted, r => maxVal(r.data.downloads.slice(-GH_DAYS), d => d.downloads));
+  let html = '';
+  for (const r of sorted) {
+    const downloads = r.data.downloads;
+    const total = downloads.reduce((a, b) => a + b.downloads, 0);
+    const recent = downloads.slice(-GH_DAYS);
+    html += `<div class="repo-section">
+      <h3>${r.pkg}</h3>
+      <div class="stat-row">
+        <div><div class="stat-num">${total.toLocaleString()}</div><div class="stat-lbl">7天安装</div></div>
+        <div><div class="stat-num">${Math.round(total / downloads.length).toLocaleString()}</div><div class="stat-lbl">日均</div></div>
+      </div>`;
+    html += barChart(recent, d => d.day.slice(5), d => d.downloads, globalPeak);
+    html += '</div>';
+  }
+  if (results.errors.length) {
+    html += `<p class="error" style="margin-top:8px">部分失败: ${results.errors.join(', ')}</p>`;
+  }
+  body.innerHTML = html;
+}
+
+function renderDify(result) {
+  const body = document.getElementById('dify-body');
+  if (result.error) {
+    body.innerHTML = `<p class="error">L1Proxy 不可达: ${result.error}</p>`;
+    return;
+  }
+  const { uptime_ms, counters } = result.data;
+  const uptimeMin = Math.round(uptime_ms / 60000);
+  const labels = {
+    'yellow-pages-discover': 'Yellow Pages 发现',
+    'reputation-query': '声誉查询',
+  };
+  let html = `<div class="stat-row">
+    <div><div class="stat-num">${uptimeMin}</div><div class="stat-lbl">运行分钟</div></div>
+  </div>
+  <table>
+    <thead><tr><th>工具</th><th>调用次数</th><th>最近调用</th></tr></thead><tbody>`;
+  for (const [key, label] of Object.entries(labels)) {
+    const c = counters[key] || { count: 0, last: null };
+    const lastStr = c.last ? new Date(c.last).toLocaleString('zh-CN') : '—';
+    html += `<tr>
+      <td class="value">${label}</td>
+      <td class="value highlight">${c.count.toLocaleString()}</td>
+      <td class="muted">${lastStr}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+function renderNetwork(result, growth) {
+  const body = document.getElementById('network-body');
+  if (result.error && !growth) {
+    body.innerHTML = `<p class="error">PublicStats 不可达: ${result.error}</p>`;
+    return;
+  }
+  const d = (result && result.data) ? result.data : {};
+  const yp = d.yellowPages || {};
+  const lobster = d.lobster || {};
+  const eco = lobster.economy || {};
+  const CITIES = { canton:'广州', calicut:'卡利卡特', zanzibar:'桑给巴尔', alexandria:'亚历山大', venice:'威尼斯', lisbon:'里斯本', london:'伦敦', amsterdam:'阿姆斯特丹', istanbul:'伊斯坦布尔', genoa:'热那亚' };
+
+  let html = `<div class="stat-row">
+    <div><div class="stat-num">${yp.total || 0}</div><div class="stat-lbl">黄页条目</div></div>
+    <div><div class="stat-num">${yp.active24h || 0}</div><div class="stat-lbl">24h 活跃</div></div>
+    <div><div class="stat-num">${eco.totalTrades24h || 0}</div><div class="stat-lbl">24h 交易</div></div>
+    <div><div class="stat-num">${lobster.players?.total || 0}</div><div class="stat-lbl">玩家</div></div>
+  </div>
+
+  <div class="repo-section"><h3>黄页标签 Top 5</h3>`;
+  const tags = (yp.topTags || []).slice(0, 5);
+  for (const t of tags) {
+    html += `<div class="bar-row">
+      <span class="day">${t.tag}</span>
+      <div style="flex:1;background:#21262d;border-radius:3px;overflow:hidden">
+        <div class="bar-fill" style="width:${tags[0].count ? Math.round(t.count/tags[0].count*100) : 0}%">${t.count}</div>
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+
+  if (lobster.players?.topGold?.length) {
+    html += `<div class="repo-section"><h3>财富排行 Top 5</h3><table>
+      <thead><tr><th>船长</th><th>金币</th><th>港口</th></tr></thead><tbody>`;
+    for (const p of lobster.players.topGold.slice(0, 5)) {
+      html += `<tr>
+        <td class="value">${(p.name||'').replace(/</g,'&lt;')}</td>
+        <td class="value highlight">${(p.gold||0).toLocaleString()}</td>
+        <td>${CITIES[p.city] || p.city || '—'}</td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+
+  // 运营数据（注册趋势 + 活跃用户）
+  if (growth && (growth.registrations.length || growth.activity.length)) {
+    const regTotal = growth.registrations.reduce((s, d) => s + (d.count || 0), 0);
+    const actTotal = growth.activity.reduce((s, d) => s + (d.count || 0), 0);
+    html += `<div class="repo-section"><h3>平台增长</h3>`;
+    html += `<div class="stat-row">
+      <div><div class="stat-num">${regTotal.toLocaleString()}</div><div class="stat-lbl">累计注册</div></div>
+      <div><div class="stat-num">${actTotal.toLocaleString()}</div><div class="stat-lbl">活跃Agent</div></div>
+    </div>`;
+
+    // 注册趋势图 (最近14天)
+    const regRecent = growth.registrations.slice(-14);
+    if (regRecent.length) {
+      const regPeak = maxVal(regRecent, d => d.count);
+      html += `<div class="stat-lbl" style="margin-top:4px">注册趋势 (日)</div>`;
+      html += barChart(regRecent, d => d.date.slice(5), d => d.count, regPeak);
+    }
+
+    // 活跃趋势图
+    const actRecent = growth.activity.slice(-7);
+    if (actRecent.length) {
+      const actPeak = maxVal(actRecent, d => d.count);
+      html += `<div class="stat-lbl" style="margin-top:8px">活跃Agent (日)</div>`;
+      html += barChart(actRecent, d => d.date.slice(5), d => d.count, actPeak);
+    }
+    html += '</div>';
+  }
+
+  body.innerHTML = html;
+}
+
+function renderMessageTraffic(growth) {
+  const body = document.getElementById('traffic-body');
+  if (!growth) {
+    body.innerHTML = '<p class="muted">请填入 OceanBus API Key</p>';
+    return;
+  }
+  const { messages, registrations, activity } = growth;
+  if (!messages.length && !activity.length && !registrations.length) {
+    body.innerHTML = '<p class="muted">暂无消息流量数据。L0 API 返回空。</p>';
+    return;
+  }
+
+  const msgTotal = messages.reduce((s, d) => s + (d.count || 0), 0);
+  const regTotal = registrations.reduce((s, d) => s + (d.count || 0), 0);
+  const actTotal = activity.reduce((s, d) => s + (d.count || 0), 0);
+
+  let html = '<div class="stat-row">' +
+    '<div><div class="stat-num">' + msgTotal.toLocaleString() + '</div><div class="stat-lbl">累计消息</div></div>' +
+    '<div><div class="stat-num">' + regTotal.toLocaleString() + '</div><div class="stat-lbl">累计注册</div></div>' +
+    '<div><div class="stat-num">' + actTotal.toLocaleString() + '</div><div class="stat-lbl">活跃Agent</div></div>' +
+    '</div>';
+
+  // 消息流量趋势图 (最近14天)
+  const msgRecent = messages.slice(-14);
+  if (msgRecent.length) {
+    const peak = maxVal(msgRecent, d => d.count);
+    html += '<div class="repo-section"><h3>消息流量 (日)</h3>';
+    html += barChart(msgRecent, d => d.date.slice(5), d => d.count, peak);
+    html += '</div>';
+  }
+
+  // 注册趋势图 (最近14天)
+  const regRecent = registrations.slice(-14);
+  if (regRecent.length) {
+    const peak = maxVal(regRecent, d => d.count);
+    html += '<div class="repo-section"><h3>注册趋势 (日)</h3>';
+    html += barChart(regRecent, d => d.date.slice(5), d => d.count, peak);
+    html += '</div>';
+  }
+
+  // 活跃Agent趋势图
+  const actRecent = activity.slice(-7);
+  if (actRecent.length) {
+    const peak = maxVal(actRecent, d => d.count);
+    html += '<div class="repo-section"><h3>活跃Agent (日)</h3>';
+    html += barChart(actRecent, d => d.date.slice(5), d => d.count, peak);
+    html += '</div>';
+  }
+
+  body.innerHTML = html;
+}
+
+async function fetchMCPTelemetry() {
+  const res = await fetch(PUBLIC_API + '/telemetry');
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+function renderMCPTelemetry(result) {
+  const body = document.getElementById('mcp-body');
+  if (result.error) {
+    body.innerHTML = '<p class="error">遥测不可达: ' + result.error + '</p>';
+    return;
+  }
+  const d = result.data || {};
+  const summary = d.summary || {};
+  if (Object.keys(summary).length === 0) {
+    body.innerHTML = '<p class="muted">暂无遥测数据。安装 oceanbus-mcp-server@0.1.6+ 后自动上报。</p>';
+    return;
+  }
+  let h = '';
+  for (const [source, s] of Object.entries(summary)) {
+    h += '<div class="repo-section"><h3>' + source + '</h3>';
+    h += '<div class="stat-row">' +
+      '<div><div class="stat-num">' + (s.total_invocations||0).toLocaleString() + '</div><div class="stat-lbl">累计调用</div></div>' +
+      '<div><div class="stat-num">' + (s.reports||0) + '</div><div class="stat-lbl">上报次数</div></div>' +
+      '<div><div class="stat-num">' + (s.last_date||'—') + '</div><div class="stat-lbl">最近上报</div></div>' +
+      '</div>';
+    const tools = Object.entries(s.tool_counts||{}).sort((a,b) => b[1] - a[1]);
+    if (tools.length) {
+      h += '<table><thead><tr><th>工具</th><th>调用次数</th></tr></thead><tbody>';
+      for (const [tool, count] of tools) {
+        h += '<tr><td class="value">' + tool + '</td><td class="value highlight">' + count.toLocaleString() + '</td></tr>';
+      }
+      h += '</tbody></table>';
+    }
+    h += '</div>';
+  }
+  body.innerHTML = h;
+}
+
+function renderPlatform(results) {
+  const body = document.getElementById('platform-body');
+  const statusLabels = { live: '已发布', pending: '待审核', guide: '指南就绪' };
+  const statusClasses = { live: 'status-live', pending: 'status-pending', guide: 'status-guide' };
+  let html = '';
+  for (const p of results) {
+    const link = p.url ? `<a href="${p.url}" target="_blank" style="color:#58a6ff;text-decoration:none">↗</a>` : '';
+    html += `<div class="platform-row">
+      <span class="platform-name">${p.name} ${link}</span>
+      <span>
+        <span class="platform-status ${statusClasses[p.status] || 'status-guide'}">${statusLabels[p.status] || p.status}</span>
+        <span class="platform-detail" style="margin-left:8px">${p.detail} · ${p.tools} 工具</span>
+      </span>
+    </div>`;
+  }
+  body.innerHTML = html;
+}
+
+// --- Main ---
+async function refreshAll() {
+  const tokens = getTokens();
+  const now = new Date().toLocaleString('zh-CN');
+
+  // ClawHub
+  const chResults = { data: [], errors: [] };
+  if (tokens.ch) {
+    for (const slug of CLAWHUB_SKILLS) {
+      try {
+        const result = await fetchClawHub(slug, tokens.ch);
+        chResults.data.push({ slug, ...result });
+      } catch (e) {
+        chResults.errors.push(slug);
+      }
+    }
+  } else {
+    document.getElementById('clawhub-body').innerHTML = `<p class="muted">请填入 ClawHub Token</p>`;
+  }
+  if (chResults.data.length || chResults.errors.length) renderClawHub(chResults);
+
+  // GitHub
+  const ghResults = { data: [], errors: [] };
+  if (tokens.gh) {
+    for (const repo of GITHUB_REPOS) {
+      try {
+        const clones = await fetchGitHubClones(repo.owner, repo.repo, tokens.gh);
+        ghResults.data.push({ ...repo, clones });
+      } catch (e) {
+        ghResults.errors.push(repo.label);
+      }
+    }
+  } else {
+    document.getElementById('github-body').innerHTML = `<p class="muted">请填入 GitHub Token</p>`;
+  }
+  if (ghResults.data.length || ghResults.errors.length) renderGitHub(ghResults);
+
+  // npm (no auth needed)
+  const npmResults = { data: [], errors: [] };
+  for (const pkg of NPM_PACKAGES) {
+    try {
+      const data = await fetchNpmDownloads(pkg);
+      npmResults.data.push({ pkg, data });
+    } catch (e) {
+      npmResults.errors.push(pkg);
+    }
+  }
+  renderNpm(npmResults);
+
+  // Dify L1Proxy
+  const L1PROXY_URL = 'http://39.106.168.88:17019/api/l1-proxy';
+  try {
+    const res = await fetch(`${L1PROXY_URL}/stats`);
+    if (res.ok) renderDify(await res.json());
+    else renderDify({ error: `HTTP ${res.status}` });
+  } catch (e) {
+    renderDify({ error: e.message });
+  }
+
+  // OceanBus Network
+  let growthData = null;
+  if (tokens.ob) {
+    try { growthData = await fetchNetworkGrowth(tokens.ob); } catch {}
+  }
+  try {
+    const netData = await fetchNetworkStats();
+    renderNetwork(netData, growthData);
+  } catch (e) {
+    renderNetwork({ error: e.message }, growthData);
+  }
+
+  // OceanBus 消息流量
+  renderMessageTraffic(growthData);
+
+  // MCP Telemetry
+  try {
+    const mcpData = await fetchMCPTelemetry();
+    renderMCPTelemetry(mcpData);
+  } catch (e) {
+    renderMCPTelemetry({ error: e.message });
+  }
+
+  // Platform Status
+  try {
+    const platforms = await fetchPlatformStatus();
+    renderPlatform(platforms);
+  } catch (e) {
+    document.getElementById('platform-body').innerHTML = `<p class="error">平台状态获取失败</p>`;
+  }
+
+  document.getElementById('lastUpdated').textContent = `最后刷新: ${now}`;
+}
+
+// --- Init ---
+loadTokens();
+refreshAll();
+</script>
+
+</body>
+</html>

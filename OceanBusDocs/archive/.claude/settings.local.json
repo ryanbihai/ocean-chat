@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm ls *)",
+      "Bash(npm install *)",
+      "Bash(node test-openid-rotation.js)",
+      "Bash(node test-oceanbus-comprehensive.js)",
+      "Bash(npm search *)",
+      "Bash(npm root *)",
+      "Bash(jq --version)",
+      "Bash(choco install *)",
+      "Bash(chmod +x \"/c/Users/Bihai/bin/jq.exe\")",
+      "PowerShell(winget install *)",
+      "Bash(npx claude-hud *)",
+      "Bash(export PATH=\"$PATH:/c/Users/Bihai/AppData/Local/Microsoft/WinGet/Links\")",
+      "PowerShell(Get-Command *)",
+      "Bash(mkdir -p \"/c/Users/Bihai/bin\")",
+      "Bash(cp \"/c/Users/Bihai/AppData/Local/Microsoft/WinGet/Packages/jqlang.jq_Microsoft.Winget.Source_8wekyb3d8bbwe/jq.exe\" \"/c/Users/Bihai/bin/jq.exe\")",
+      "WebFetch(domain:docs.clawhub.ai)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(npx tsc *)",
+      "Bash(npx jest *)",
+      "Bash(npm test *)",
+      "Bash(npm pack *)",
+      "Bash(mkdir -p /tmp/oceanbus-test)",
+      "Read(//tmp/**)",
+      "Bash(rm -rf node_modules package.json package-lock.json)",
+      "Bash(npm init *)",
+      "Bash(npx oceanbus *)",
+      "Bash(npm whoami *)",
+      "Bash(npm view *)",
+      "Bash(npm login *)",
+      "Bash(npm publish *)",
+      "Bash(npm token *)",
+      "Bash(OCEANBUS_BASE_URL=\"https://api.oceanbus.com/api/l0\" node -e \"const {resolveConfig} = require\\('./dist/config/loader'\\); console.log\\(resolveConfig\\(\\).baseUrl\\)\")",
+      "Bash(npm version *)"
+    ]
+  }
+}

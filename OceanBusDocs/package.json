@@ -1,0 +1,16 @@
+{
+  "name": "oceanbusdocs",
+  "version": "1.0.0",
+  "main": "probe-l0-internal-apis.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "oceanbus": "^0.3.4",
+    "superagent": "^10.3.0"
+  }
+}

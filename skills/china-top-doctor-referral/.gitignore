@@ -1,0 +1,4 @@
+# 本地测试配置及状态文件，不上传
+.env
+./pending_ctx.json
+pending_ctx.json

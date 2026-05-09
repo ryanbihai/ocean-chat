@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git clone *)",
+      "Bash(rm -rf \"C:/IT/00工具和探索/tmp-cs1\"/* \"C:/IT/00工具和探索/tmp-cs1\"/.github)",
+      "Bash(cp -r \"C:/IT/00工具和探索/oceanbus/skills/china-top-doctor-referral\"/* \"C:/IT/00工具和探索/tmp-cs1/\")",
+      "Read(//c/IT/00工具和探索/**)",
+      "Bash(rm -rf \"C:/IT/00工具和探索/tmp-cs2\"/*)",
+      "Bash(cp -r \"C:/IT/00工具和探索/oceanbus/skills/health-checkup-recommender\"/* \"C:/IT/00工具和探索/tmp-cs2/\")"
+    ]
+  }
+}

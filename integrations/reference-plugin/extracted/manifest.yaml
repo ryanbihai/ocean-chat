@@ -1,0 +1,36 @@
+version: 0.0.1
+type: plugin
+author: cloudsway
+name: cloudswayai_skyrouter_tool
+label:
+  en_US: Cloudswayai Skyrouter Tool
+  zh_Hans: Cloudswayai Skyrouter 工具
+description:
+  en_US: Skyrouter Tools
+  zh_Hans: Skyrouter 工具集, 支持图像生成和编辑
+icon: icon.png
+resource:
+  memory: 268435456
+  permission:
+    tool:
+      enabled: true
+    model:
+      enabled: true
+      llm: true
+plugins:
+  tools:
+    - provider/skyrouter_tool.yaml
+meta:
+  version: 0.0.1
+  arch:
+    - amd64
+    - arm64
+  runner:
+    language: python
+    version: "3.12"
+    entrypoint: main
+  minimum_dify_version: 0.0.1
+created_at: 2025-08-19T17:29:03.5938054+08:00
+privacy: PRIVACY.md
+repo: https://github.com/Cloudsway-AI/cloudswayAI_skyrouter_tool
+verified: false

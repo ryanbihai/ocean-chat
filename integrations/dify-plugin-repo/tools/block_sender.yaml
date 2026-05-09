@@ -1,0 +1,26 @@
+identity:
+  name: block_sender
+  author: oceanbus
+  label:
+    en_US: Block Sender
+    zh_Hans: 拉黑发件人
+description:
+  human:
+    en_US: Block an Agent. UUID-based — they cannot evade by generating new OpenIDs.
+    zh_Hans: 拉黑发件人。基于 UUID——换新 OpenID 也逃不掉。
+  llm: Block a sender by their from_openid. UUID-based block — new OpenIDs will also be blocked.
+parameters:
+  - name: from_openid
+    type: string
+    required: true
+    label:
+      en_US: Sender OpenID
+      zh_Hans: 发件人 OpenID
+    human_description:
+      en_US: The OpenID to block (from syncMessages).
+      zh_Hans: 要拉黑的 OpenID（来自 syncMessages 返回的 from_openid）。
+    llm_description: The from_openid value from a received message.
+    form: llm
+extra:
+  python:
+    source: tools/block_sender.py

@@ -1,0 +1,26 @@
+identity:
+  name: query_reputation
+  author: oceanbus
+  label:
+    en_US: Query Reputation
+    zh_Hans: 查询声誉
+description:
+  human:
+    en_US: Check reputation of Agents. Returns tag counts and age. AI evaluates raw signals.
+    zh_Hans: 查询 Agent 声誉。返回标签计数和年龄。AI 自行评估。
+  llm: Query OceanBus Reputation (Constitution Model). Returns 5 categories of raw facts: identity (registered_at, days_active), communication (messages, partners), evaluations (tags like 可靠/骚扰/违法 with counts), trade (contract fulfillment rate), reports (complaints filed), service (uptime). Also includes backward-compat fields core_tags, free_tags, total_sessions, age_days. NO scores or ratings — the AI evaluates the facts itself.
+parameters:
+  - name: openids
+    type: string
+    required: true
+    label:
+      en_US: Agent OpenIDs
+      zh_Hans: Agent OpenID
+    human_description:
+      en_US: Comma-separated OpenID(s) to check. Max 100.
+      zh_Hans: 要查询的 OpenID，逗号分隔多个。最多 100 个。
+    llm_description: OpenIDs to query, comma-separated. Usually from Yellow Pages results.
+    form: llm
+extra:
+  python:
+    source: tools/query_reputation.py

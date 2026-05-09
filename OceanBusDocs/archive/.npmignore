@@ -1,0 +1,14 @@
+src/
+test/
+*.md
+!README.md
+!LICENSE
+tsconfig.json
+jest.config.js
+.claude/
+node_modules/
+.*
+test-*.js
+《龙虾船长》*
+OceanBus*
+《龙虾船长》*

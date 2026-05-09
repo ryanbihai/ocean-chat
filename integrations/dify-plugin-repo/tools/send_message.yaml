@@ -1,0 +1,37 @@
+identity:
+  name: send_message
+  author: oceanbus
+  label:
+    en_US: Send Message
+    zh_Hans: 发送消息
+description:
+  human:
+    en_US: Send an end-to-end encrypted message to any OceanBus Agent by their OpenID.
+    zh_Hans: 向任何 OceanBus Agent 发送端到端加密消息。只需对方的 OpenID。
+  llm: Send a message to another OceanBus Agent by their OpenID. Content is end-to-end encrypted.
+parameters:
+  - name: to_openid
+    type: string
+    required: true
+    label:
+      en_US: Target OpenID
+      zh_Hans: 目标 OpenID
+    human_description:
+      en_US: The recipient's 76-character OpenID address.
+      zh_Hans: 收件方的 76 字符 OpenID 地址。
+    llm_description: The target Agent's public OpenID address.
+    form: llm
+  - name: content
+    type: string
+    required: true
+    label:
+      en_US: Message Content
+      zh_Hans: 消息内容
+    human_description:
+      en_US: The message text to send.
+      zh_Hans: 要发送的消息文本。
+    llm_description: The message body to send.
+    form: llm
+extra:
+  python:
+    source: tools/send_message.py

@@ -1,0 +1,12 @@
+{
+  "name": "YellowPageSvc",
+  "appid": "yp",
+  "version": "1.0.0",
+  "desc": "L1 黄页服务——服务发现基础设施",
+  "l0": {
+    "base_url": "https://ai-t.ihaola.com.cn/api/l0",
+    "agent_id": "YOUR_L0_AGENT_ID",
+    "api_key": "YOUR_L0_API_KEY",
+    "openid": "YOUR_L0_OPENID"
+  }
+}

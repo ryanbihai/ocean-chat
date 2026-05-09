@@ -1,0 +1,16 @@
+{
+  "name": "oceanbus-lighthouse-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OceanBus Lighthouse Demo — chat between phone and computer with zero server deployment",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "oceanbus": "^0.1.7",
+    "express": "^4.21.0",
+    "ws": "^8.18.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
