@@ -1,6 +1,6 @@
 {
   "name": "oceanbus",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "OceanBus AI Agent Communication & Trust Infrastructure SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

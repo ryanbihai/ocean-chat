@@ -25,8 +25,14 @@ export const DEFAULTS: OceanBusConfig = {
   },
 
   l1: {
-    ypOpenids: [],
-    repOpenid: '',
+    // Offline fallback cache for L1 service addresses.
+    // SDK fetches /.well-known/oceanbus-services.json on startup;
+    // these values are used only when the server is unreachable.
+    // Overridable via OCEANBUS_YP_OPENIDS / OCEANBUS_REP_OPENID env vars.
+    ypOpenids: [
+      'YwvQeEb8X9b394wKxetJ06EV9w5IIglMlucJmbb_gwLbBg_dB50NyB7SYdxBAIObSjdPNprkooxZ3icV',
+    ],
+    repOpenid: 'msGHHPgQlQMNNjBmiuvDpwzFrRqPrjm7NjIRFfNILbPA31LfKvUFkYqUHGklEmUjtP0o-_kkPmSB3hs-',
     trustedCAs: [],
     requestTimeoutMs: 30000,
     requestPollIntervalMs: 1000,

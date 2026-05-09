@@ -11,6 +11,7 @@ import type { MessageHandler } from './mailbox/poller';
 import { SeqCursor } from './mailbox/cursor';
 import { resolveConfig } from './config/loader';
 import { DEFAULTS } from './config/defaults';
+import { fetchWellKnown } from './bootstrap/well-known';
 import type { OceanBusConfig, PartialConfig } from './types/config';
 import type { RegistrationData } from './types/agent';
 import type { Message } from './types/messaging';
@@ -191,9 +192,18 @@ export class OceanBus {
       config.l1.requestPollIntervalMs
     );
 
-    // L1 clients — initialized lazily when OpenIDs are configured
-    const ypOpenid = config.l1.ypOpenids[0] || DEFAULTS.l1.ypOpenids[0];
-    const repOpenid = config.l1.repOpenid || DEFAULTS.l1.repOpenid;
+    // L1 clients — try well-known first, fall back to built-in cache
+    let ypOpenid = config.l1.ypOpenids[0] || DEFAULTS.l1.ypOpenids[0];
+    let repOpenid = config.l1.repOpenid || DEFAULTS.l1.repOpenid;
+
+    // If user didn't override via env/config, try fetching from server
+    if (!config.l1.ypOpenids[0]) {
+      const wellKnown = await fetchWellKnown(config.baseUrl);
+      if (wellKnown) {
+        ypOpenid = wellKnown.yellow_pages;
+        repOpenid = wellKnown.reputation;
+      }
+    }
     const transport = {
       send: (to: string, content: string, cid?: string) => ob.messaging.send(to, content, cid),
       sendJson: (to: string, data: object, cid?: string) => ob.messaging.sendJson(to, data, cid),
@@ -229,31 +239,27 @@ export class OceanBus {
     return ob;
   }
 
-  // Built-in L1 service addresses that every agent gets by default
-  private static readonly BOOTSTRAP_CONTACTS = [
-    {
-      id: 'oceanbus-yp',
-      name: 'OceanBus 黄页',
-      openid: DEFAULTS.l1.ypOpenids[0],
-      tags: ['system', 'yellow-pages', 'discovery'],
-      notes: '搜索 AI Agent 和服务。说"帮我找XX"即可。',
-      source: 'system' as const,
-      aliases: ['黄页', 'Yellow Pages', 'YP'],
-    },
-    {
-      id: 'oceanbus-reputation',
-      name: 'OceanBus 声誉',
-      openid: DEFAULTS.l1.repOpenid,
-      tags: ['system', 'reputation', 'trust'],
-      notes: '查询 Agent 声誉和信任数据。',
-      source: 'system' as const,
-      aliases: ['声誉', 'Reputation', 'REP'],
-    },
-  ];
-
   private async bootstrapRoster(): Promise<void> {
-    for (const c of OceanBus.BOOTSTRAP_CONTACTS) {
-      // Skip if already in roster (by OpenID or by id)
+    // Use resolved OpenIDs (from well-known, env, or built-in fallback)
+    const ypOpenid = this.config.l1.ypOpenids[0] || DEFAULTS.l1.ypOpenids[0];
+    const repOpenid = this.config.l1.repOpenid || DEFAULTS.l1.repOpenid;
+
+    const contacts = [
+      {
+        id: 'oceanbus-yp', name: 'OceanBus 黄页', openid: ypOpenid,
+        tags: ['system', 'yellow-pages', 'discovery'],
+        notes: '搜索 AI Agent 和服务。说"帮我找XX"即可。',
+        aliases: ['黄页', 'Yellow Pages', 'YP'],
+      },
+      {
+        id: 'oceanbus-reputation', name: 'OceanBus 声誉', openid: repOpenid,
+        tags: ['system', 'reputation', 'trust'],
+        notes: '查询 Agent 声誉和信任数据。',
+        aliases: ['声誉', 'Reputation', 'REP'],
+      },
+    ];
+
+    for (const c of contacts) {
       const existingById = await this.roster.get(c.id);
       if (existingById && existingById.status !== 'archived') continue;
       const existingByOpenId = await this.roster.findByOpenId(c.openid);
@@ -261,17 +267,12 @@ export class OceanBus {
 
       try {
         await this.roster.add({
-          id: c.id,
-          name: c.name,
+          id: c.id, name: c.name,
           agents: [{ agentId: '', openId: c.openid, purpose: 'L1 service', isDefault: true }],
-          tags: c.tags,
-          notes: c.notes,
-          source: c.source,
-          aliases: c.aliases,
+          tags: c.tags, notes: c.notes,
+          source: 'system' as const, aliases: c.aliases,
         });
-      } catch {
-        // Already exists — fine
-      }
+      } catch { /* already exists */ }
     }
   }
 
