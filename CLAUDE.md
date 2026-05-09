@@ -76,6 +76,8 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 **触发词**：`发布 ocean-chat`、`发布 guess-ai v2.2.0`、`发布 skill`、`请发布到所有平台`
 
+> **权威参考**：[OceanBus 发布指南](OceanBusDocs/OceanBus 发布指南.md) 第一章。本节为快速操作版——参数细节、踩坑记录、品牌装修要求以发布指南为准。
+
 **步骤**（不得跳步，不得改变顺序）：
 
 ```
@@ -126,6 +128,8 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 **触发词**：`发布 SDK`、`发布 oceanbus v0.5.0`、`发布 oceanbus 到 npm`
 
+> **权威参考**：[OceanBus 发布指南](OceanBusDocs/OceanBus 发布指南.md) 第二章。本节为快速操作版——参数细节和踩坑记录以发布指南为准。
+
 ```
 1. 确认版本号
    → 检查 ai-backend-template/src/apps/03-OceanBusSDK/package.json 中 version
@@ -167,6 +171,8 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 **触发词**：`部署 YellowPageSvc`、`上线 ReputationSvc`、`更新 L1`
 
+> **权威参考**：[OceanBus 发布指南](OceanBusDocs/OceanBus 发布指南.md) 第三章。本节为快速操作版——SSH 连接、PM2 命令和踩坑记录以发布指南为准。
+
 ```
 1. 确认变更已提交并推送
    → git status && git push origin master
@@ -191,6 +197,17 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ### 5.5 批量发布：所有有更新的 Skill
 
 **触发词**：`发布所有有更新的到所有平台`、`发布所有变更`、`批量发布 skill`
+
+> **执行前必须阅读**：[OceanBus 发布指南](OceanBusDocs/OceanBus 发布指南.md) —— 所有步骤和规范以发布指南为准。本节是快速操作版，发布指南有完整的参数说明、踩坑记录和品牌装修要求。
+>
+> 特别注意以下发布指南中的规则，批量发布时同样适用：
+> - **GitHub 先，ClawHub 后**（指南 1.4、1.5 节）
+> - **description 用英文**，正文用中文（指南 1.2.2 节）
+> - **SKILL.md version 递增**，发布前检查（指南 1.6 节）
+> - **--name 必带**，否则 displayName 变 "Skill"（指南 1.6 节）
+> - **发布前先 `clawhub inspect`** 确认线上版本号（指南 1.6 节）
+> - **每小时最多 5 个新 skill**，更新不受限（指南 1.6 节）
+> - **README 徽章 + 相关项目节** 每次发布后检查（指南 4.2、4.3 节）
 
 **执行流程**：
 
