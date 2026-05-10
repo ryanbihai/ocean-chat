@@ -11,6 +11,10 @@
 //   node chat.js whoami                       Show your OpenID
 //   node chat.js add <name> <openid>          Save a contact to Roster
 //   node chat.js contacts                     List saved contacts (from Roster)
+//   node chat.js show <name>                  Show contact details
+//   node chat.js remove <name>                Delete a contact
+//   node chat.js rename <name> <newname>      Rename a contact
+//   node chat.js tag <name> <tags>            Set tags on a contact
 //   node chat.js send <name|openid> <msg>     Send a message (Roster-aware)
 //   node chat.js check                        Check for new messages
 //   node chat.js thread create <name>         Start a conversation thread
@@ -269,6 +273,73 @@ async function cmdContacts() {
     const tagStr = c.tags.length > 0 ? ' [' + c.tags.join(', ') + ']' : '';
     console.log('  ' + c.name + ' — ' + shortId(openid) + tagStr);
   }
+}
+
+async function cmdRemove(name) {
+  if (!name) { console.log('用法: node chat.js remove <名字>'); return; }
+  await migrateContacts();
+  const roster = getRoster();
+  const result = await roster.search(name);
+  if (result.exact.length === 0) {
+    console.log('通讯录中没有: ' + name);
+    return;
+  }
+  const c = result.exact[0];
+  await roster.delete(c.id);
+  console.log('已删除: ' + c.name);
+}
+
+async function cmdRename(name, newName) {
+  if (!name || !newName) { console.log('用法: node chat.js rename <名字> <新名字>'); return; }
+  await migrateContacts();
+  const roster = getRoster();
+  const result = await roster.search(name);
+  if (result.exact.length === 0) {
+    console.log('通讯录中没有: ' + name);
+    return;
+  }
+  const c = result.exact[0];
+  await roster.update(c.id, { name: newName });
+  console.log('已改名: ' + c.name + ' → ' + newName);
+}
+
+async function cmdShow(name) {
+  if (!name) { console.log('用法: node chat.js show <名字>'); return; }
+  await migrateContacts();
+  const roster = getRoster();
+  const result = await roster.search(name);
+  if (result.exact.length === 0) {
+    console.log('通讯录中没有: ' + name);
+    return;
+  }
+  const c = result.exact[0];
+  const openid = c.agents[0]?.openId || '(无)';
+  const lastContact = c.lastContactAt
+    ? new Date(c.lastContactAt).toLocaleString('zh-CN')
+    : '从未联系';
+  console.log('名字: ' + c.name);
+  console.log('OpenID: ' + openid);
+  console.log('简写: ' + shortId(openid));
+  console.log('标签: ' + (c.tags.length > 0 ? c.tags.join(', ') : '(无)'));
+  console.log('别名: ' + (c.aliases.length > 0 ? c.aliases.join(', ') : '(无)'));
+  console.log('备注: ' + (c.notes || '(无)'));
+  console.log('最后联系: ' + lastContact);
+  console.log('来源: ' + c.source);
+}
+
+async function cmdTag(name, tags) {
+  if (!name || !tags) { console.log('用法: node chat.js tag <名字> <标签1,标签2...>'); return; }
+  await migrateContacts();
+  const roster = getRoster();
+  const result = await roster.search(name);
+  if (result.exact.length === 0) {
+    console.log('通讯录中没有: ' + name);
+    return;
+  }
+  const c = result.exact[0];
+  const tagList = tags.split(',').map(t => t.trim()).filter(Boolean);
+  await roster.updateTags(c.id, tagList);
+  console.log('已更新标签: ' + c.name + ' → [' + tagList.join(', ') + ']');
 }
 
 async function cmdSend(target, message, fromName) {
@@ -1033,6 +1104,10 @@ async function main() {
     console.log('  node chat.js whoami                     查看你的 OpenID');
     console.log('  node chat.js add <名字> <OpenID>        添加联系人（存入 Roster）');
     console.log('  node chat.js contacts                   查看通讯录（读取 Roster）');
+    console.log('  node chat.js show <名字>                查看联系人详情');
+    console.log('  node chat.js remove <名字>              删除联系人');
+    console.log('  node chat.js rename <名字> <新名字>     重命名联系人');
+    console.log('  node chat.js tag <名字> <标签1,标签2>   设置联系人标签');
     console.log('  node chat.js send <名字|OpenID> <消息>  发送消息');
     console.log('    --from <你的名字>                     附加 From/To 消息头（多 CC 场景）');
     console.log('  node chat.js check                      查看新消息');
@@ -1078,6 +1153,18 @@ async function main() {
         break;
       case 'contacts':
         await cmdContacts();
+        break;
+      case 'remove':
+        await cmdRemove(args[1]);
+        break;
+      case 'rename':
+        await cmdRename(args[1], args[2]);
+        break;
+      case 'show':
+        await cmdShow(args[1]);
+        break;
+      case 'tag':
+        await cmdTag(args[1], args[2]);
         break;
       case 'send': {
         const target = args[1];
