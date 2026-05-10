@@ -1,7 +1,7 @@
 ---
 name: ocean-chat
 description: OceanBus-powered P2P messaging, shared address book, 1v1 meetup negotiation, and conversation threading for AI agents. Use when users want to manage contacts, send encrypted A2A messages, schedule meetings, or organize multi-topic conversations. Zero deployment, 5-minute setup. npm install oceanbus.
-version: 2.11.0
+version: 2.11.1
 metadata:
   openclaw:
     requires:

@@ -25,7 +25,12 @@ const path = require('path');
 const os = require('os');
 
 // ── Config ────────────────────────────────────────────────────────────────
-const DATA_DIR = path.join(os.homedir(), '.oceanbus-chat');
+// Support --data-dir for per-project CC identity (multi-window scenario)
+function getArg(name) {
+  const idx = process.argv.indexOf(name);
+  return (idx >= 0 && idx + 1 < process.argv.length) ? process.argv[idx + 1] : null;
+}
+const DATA_DIR = getArg('--data-dir') || path.join(os.homedir(), '.oceanbus-chat');
 const CRED_FILE = path.join(DATA_DIR, 'credentials.json');
 const CURSOR_FILE = path.join(DATA_DIR, 'cursor.json');
 const DATE_LOG_FILE = path.join(DATA_DIR, 'date-log.json');
@@ -604,7 +609,23 @@ async function cmdListen(onMessage) {
   console.log('');
 
   ob.startListening(async (msg) => {
-    const contact = await roster.findByOpenId(msg.from_openid);
+    let contact = await roster.findByOpenId(msg.from_openid);
+    // Auto-add unknown sender to Roster so 'send <name>' works immediately
+    if (!contact) {
+      // Try to extract a name from From: header in message body
+      let autoName = null;
+      const fromMatch = msg.content.match(/^From:\s*(.+)$/m);
+      if (fromMatch) autoName = fromMatch[1].trim();
+      if (!autoName) autoName = '小龙虾';
+      try {
+        await roster.add({ name: autoName, source: 'auto' });
+        const added = await roster.findByOpenId(msg.from_openid);
+        if (added) {
+          contact = added;
+          console.log('[Roster] 自动添加联系人: ' + autoName + ' (' + shortId(msg.from_openid) + ')');
+        }
+      } catch (_) { /* ignore duplicate */ }
+    }
     const fromName = contact ? contact.name : null;
     const from = fromName
       ? fromName + ' (' + shortId(msg.from_openid) + ')'
@@ -895,6 +916,11 @@ async function cmdThreadReopen(threadId) {
 
 async function main() {
   const args = process.argv.slice(2);
+
+  // Strip global --data-dir flag before command dispatch (already consumed in Config)
+  const ddIdx = args.indexOf('--data-dir');
+  if (ddIdx >= 0) args.splice(ddIdx, 2);
+
   const cmd = args[0];
 
   if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
@@ -926,6 +952,12 @@ async function main() {
     console.log('  node chat.js thread reopen <id>         重开已结束线程');
     console.log('');
     console.log('数据存储在: ' + DATA_DIR + ' （通讯录存储在 ~/.oceanbus/roster.json）');
+    console.log('');
+    console.log('全局选项:');
+    console.log('  --data-dir <路径>   使用指定目录存储身份和数据（多 CC 窗口场景）');
+    console.log('');
+    console.log('  node chat.js pm2-init <CC名字>         生成 PM2 ecosystem 配置文件（一键启动）');
+    console.log('    pm2 start .oceanbus-cc/ecosystem.config.json  # 然后运行这个');
     return;
   }
 
@@ -1024,6 +1056,28 @@ async function main() {
           console.log('thread 子命令: create | reply | list | show | resolve | reopen');
           console.log('运行 "node chat.js help" 查看详细帮助。');
         }
+        break;
+      }
+      case 'pm2-init': {
+        const ccName = args[1] || ('CC-' + path.basename(process.cwd()));
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        const scriptPath = path.resolve(__filename);
+        // Prompt must avoid -- prefixed words (claude CLI parses them as flags)
+        const onMsgCmd = `claude -p "收到小龙虾的任务: {content}。完成后立即用下面的命令汇报结果: node ${scriptPath} send Bridge from ${ccName} 把关键发现、修改的文件、执行结果写清楚。"`;
+        const config = {
+          apps: [{
+            name: `ob-${ccName.replace(/^CC-/, '')}`,
+            script: scriptPath,
+            args: `--data-dir ${DATA_DIR} listen --on-message ${JSON.stringify(onMsgCmd)}`,
+          }]
+        };
+        const configPath = path.join(DATA_DIR, 'ecosystem.config.json');
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+        console.log('已生成: ' + configPath);
+        console.log('');
+        console.log('启动命令:');
+        console.log('  pm2 start ' + configPath);
+        console.log('  pm2 save');
         break;
       }
       default:
