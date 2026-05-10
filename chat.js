@@ -286,35 +286,52 @@ async function cmdSend(target, message, fromName) {
   await migrateContacts();
 
   const roster = getRoster();
-
-  // Resolve target using Roster search
-  const searchResult = await roster.search(target);
   let openid, displayName;
 
-  if (searchResult.exact.length === 1) {
-    const contact = searchResult.exact[0];
-    openid = contact.agents[0]?.openId || target;
-    displayName = contact.name;
-    await roster.touch(contact.id);
-  } else if (searchResult.exact.length > 1) {
-    // Multiple exact matches — use the first one with agents
-    const withAgent = searchResult.exact.find(e => e.agents.length > 0);
-    if (withAgent) {
-      openid = withAgent.agents[0].openId;
-      displayName = withAgent.name;
-    } else {
-      openid = target;
-      displayName = target;
+  // Check task-queue for the target's most recent OpenID first —
+  // this is the freshest address they actually sent from, avoids stale Roster entries
+  const taskQueuePath = path.join(DATA_DIR, 'task-queue.json');
+  let taskOpenid = null;
+  try {
+    const queue = JSON.parse(fs.readFileSync(taskQueuePath, 'utf-8'));
+    const recent = queue.filter(t => t.from === target && t.openid);
+    if (recent.length > 0) {
+      taskOpenid = recent[recent.length - 1].openid;
     }
-  } else if (searchResult.fuzzy.length > 0) {
-    const contact = searchResult.fuzzy[0];
-    openid = contact.agents[0]?.openId || target;
-    displayName = contact.name;
-    await roster.touch(contact.id);
+  } catch (_) { /* task queue doesn't exist or is empty */ }
+
+  if (taskOpenid) {
+    openid = taskOpenid;
+    displayName = target;
   } else {
-    // Treat as raw OpenID
-    openid = target;
-    displayName = shortId(target);
+    // Resolve target using Roster search
+    const searchResult = await roster.search(target);
+
+    if (searchResult.exact.length === 1) {
+      const contact = searchResult.exact[0];
+      openid = contact.agents[0]?.openId || target;
+      displayName = contact.name;
+      await roster.touch(contact.id);
+    } else if (searchResult.exact.length > 1) {
+      // Multiple exact matches — use the first one with agents
+      const withAgent = searchResult.exact.find(e => e.agents.length > 0);
+      if (withAgent) {
+        openid = withAgent.agents[0].openId;
+        displayName = withAgent.name;
+      } else {
+        openid = target;
+        displayName = target;
+      }
+    } else if (searchResult.fuzzy.length > 0) {
+      const contact = searchResult.fuzzy[0];
+      openid = contact.agents[0]?.openId || target;
+      displayName = contact.name;
+      await roster.touch(contact.id);
+    } else {
+      // Treat as raw OpenID
+      openid = target;
+      displayName = shortId(target);
+    }
   }
 
   // Build message with optional From/To headers
