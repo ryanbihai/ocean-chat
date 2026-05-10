@@ -414,7 +414,7 @@ async function cmdSend(target, message, fromName) {
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
-    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
   });
 
   await ob.send(openid, body);
@@ -436,7 +436,7 @@ async function cmdCheck() {
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
-    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
   });
 
   const roster = getRoster();
@@ -529,7 +529,7 @@ async function cmdDate(target, type, opts) {
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
-    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
   });
 
   await ob.send(openid, msg);
@@ -604,7 +604,7 @@ async function cmdPublish(name) {
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
-    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
   });
 
   const key = await ob.createServiceKey();
@@ -635,7 +635,7 @@ async function cmdDiscover(name) {
   const creds = loadCredentials();
   const ob = creds ? await createOceanBus({
     keyStore: { type: 'memory' },
-    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
   }) : await createOceanBus({ keyStore: { type: 'memory' } });
 
   try {
@@ -665,7 +665,7 @@ async function cmdUnpublish() {
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
-    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
   });
 
   const key = await ob.createServiceKey();
@@ -689,7 +689,7 @@ async function cmdListen(onMessage) {
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
-    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
   });
 
   const roster = getRoster();
@@ -859,7 +859,7 @@ async function cmdThreadCreate(target, subject, payloadStr) {
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
-    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
   });
   await ob.send(openid, msg);
   await ob.destroy();
@@ -899,7 +899,7 @@ async function cmdThreadReply(threadId, message) {
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
-    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
   });
   await ob.send(t.participant, msg);
   await ob.destroy();
@@ -995,7 +995,7 @@ async function cmdThreadResolve(threadId) {
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
-    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
   });
   await ob.send(t.participant, msg);
   await ob.destroy();
@@ -1027,7 +1027,7 @@ async function cmdThreadReopen(threadId) {
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
-    identity: { agent_id: creds.agent_id, api_key: creds.api_key },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
   });
   await ob.send(t.participant, msg);
   await ob.destroy();
