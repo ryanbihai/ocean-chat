@@ -615,21 +615,35 @@ async function cmdListen(onMessage) {
 
   ob.startListening(async (msg) => {
     let contact = await roster.findByOpenId(msg.from_openid);
-    // Auto-add unknown sender to Roster so 'send <name>' works immediately
+    // Auto-manage Roster: add new contacts, update stale OpenIDs
     if (!contact) {
-      // Try to extract a name from From: header in message body
       let autoName = null;
       const fromMatch = msg.content.match(/^From:\s*(.+)$/m);
       if (fromMatch) autoName = fromMatch[1].trim();
       if (!autoName) autoName = '小龙虾';
-      try {
-        await roster.add({ name: autoName, source: 'auto' });
-        const added = await roster.findByOpenId(msg.from_openid);
-        if (added) {
-          contact = added;
-          console.log('[Roster] 自动添加联系人: ' + autoName + ' (' + shortId(msg.from_openid) + ')');
-        }
-      } catch (_) { /* ignore duplicate */ }
+
+      // Check if a contact with this name already exists (e.g. Bridge got new OpenID)
+      const searchResult = await roster.search(autoName);
+      if (searchResult.exact.length > 0) {
+        // Update existing contact's OpenID (identity change — e.g. reinstalled)
+        const c = searchResult.exact[0];
+        const newAgent = { agentId: '', openId: msg.from_openid, purpose: 'OceanBus 联系人', isDefault: true };
+        await roster.update(c.id, { agents: [newAgent] });
+        await roster.touch(c.id);
+        contact = await roster.findByOpenId(msg.from_openid);
+        console.log('[Roster] 更新联系人 OpenID: ' + autoName + ' → ' + shortId(msg.from_openid));
+      } else {
+        // Brand new contact — add to Roster
+        try {
+          const newAgent = { agentId: '', openId: msg.from_openid, purpose: 'OceanBus 联系人', isDefault: true };
+          await roster.add({ name: autoName, agents: [newAgent], source: 'auto' });
+          const added = await roster.findByOpenId(msg.from_openid);
+          if (added) {
+            contact = added;
+            console.log('[Roster] 自动添加联系人: ' + autoName + ' (' + shortId(msg.from_openid) + ')');
+          }
+        } catch (_) { /* ignore duplicate */ }
+      }
     }
     const fromName = contact ? contact.name : null;
     const from = fromName
