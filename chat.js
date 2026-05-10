@@ -19,6 +19,7 @@
 
 const { createOceanBus, RosterService } = require('oceanbus');
 const threads = require('./threads');
+const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -260,7 +261,7 @@ async function cmdContacts() {
   }
 }
 
-async function cmdSend(target, message) {
+async function cmdSend(target, message, fromName) {
   const creds = loadCredentials();
   if (!creds) {
     console.log('尚未注册。运行: node chat.js setup');
@@ -268,7 +269,7 @@ async function cmdSend(target, message) {
   }
 
   if (!target || !message) {
-    console.log('用法: node chat.js send <名字|OpenID> <消息>');
+    console.log('用法: node chat.js send <名字|OpenID> <消息> [--from <你的名字>]');
     return;
   }
 
@@ -306,12 +307,19 @@ async function cmdSend(target, message) {
     displayName = shortId(target);
   }
 
+  // Build message with optional From/To headers
+  let body = message;
+  if (fromName) {
+    const sep = '─'.repeat(32);
+    body = `From: ${fromName}\nTo: ${displayName}\n${sep}\n${message}`;
+  }
+
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
     identity: { agent_id: creds.agent_id, api_key: creds.api_key },
   });
 
-  await ob.send(openid, message);
+  await ob.send(openid, body);
 
   console.log('已发送 → ' + displayName);
   await ob.destroy();
@@ -575,7 +583,7 @@ async function cmdUnpublish() {
   await ob.destroy();
 }
 
-async function cmdListen() {
+async function cmdListen(onMessage) {
   const creds = loadCredentials();
   if (!creds) { console.log('尚未注册。运行: node chat.js setup'); return; }
 
@@ -588,14 +596,35 @@ async function cmdListen() {
 
   const roster = getRoster();
 
-  console.log('[Ocean Chat] 实时监听中... 按 Ctrl+C 停止\n');
+  if (onMessage) {
+    console.log('[Ocean Chat] 实时监听中... 收到消息时会执行: ' + onMessage);
+  } else {
+    console.log('[Ocean Chat] 实时监听中... 按 Ctrl+C 停止');
+  }
+  console.log('');
 
   ob.startListening(async (msg) => {
     const contact = await roster.findByOpenId(msg.from_openid);
-    const from = contact
-      ? contact.name + ' (' + shortId(msg.from_openid) + ')'
+    const fromName = contact ? contact.name : null;
+    const from = fromName
+      ? fromName + ' (' + shortId(msg.from_openid) + ')'
       : msg.from_openid;
     const time = formatTime(msg.created_at);
+
+    // Parse optional From/To headers from message body
+    const headerRE = /^From:\s*(.+)\nTo:\s*(.+)\n([-─]{8,})\n/;
+    const headerMatch = msg.content.match(headerRE);
+    let body = msg.content;
+    let msgFrom = null, msgTo = null;
+    if (headerMatch) {
+      msgFrom = headerMatch[1].trim();
+      msgTo = headerMatch[2].trim();
+      body = msg.content.slice(headerMatch[0].length);
+      // Update fromName for --on-message hook: prefer header From over Roster
+      if (!fromName && msgFrom) {
+        // Roster may not have this contact yet; use header as fallback
+      }
+    }
 
     // Handle thread protocol
     const threadResult = threads.handleThreadProtocol(msg, true, contact?.name || null);
@@ -606,13 +635,35 @@ async function cmdListen() {
       console.log('  [' + (threadResult.thread_id || '').slice(0, 14) + '...]'
         + (threadResult.subject ? ' ' + threadResult.subject : ''));
     }
+    if (msgFrom && msgTo) {
+      console.log('  ' + msgFrom + ' → ' + msgTo);
+    }
     if (threadResult && threadResult.displayText) {
       console.log(threadResult.displayText);
     } else {
-      const protocolDisplay = formatProtocolDisplay(msg.content);
-      console.log(protocolDisplay || msg.content);
+      const protocolDisplay = formatProtocolDisplay(body);
+      console.log(protocolDisplay || body);
     }
     console.log('');
+
+    // --on-message hook (use parsed body, not raw content)
+    if (onMessage) {
+      const hookFrom = msgFrom || fromName || msg.from_openid;
+      const escaped = (s) => s.replace(/"/g, '\\"');
+      const cmd = onMessage
+        .replace(/\{from\}/g, escaped(hookFrom))
+        .replace(/\{openid\}/g, escaped(msg.from_openid))
+        .replace(/\{content\}/g, escaped(body))
+        .replace(/\{time\}/g, escaped(time));
+      exec(cmd, (err, stdout, stderr) => {
+        if (err) {
+          console.error('[on-message] 钩子执行失败: ' + err.message);
+        } else {
+          if (stdout.trim()) console.log('[on-message] ' + stdout.trim());
+          if (stderr.trim()) console.error('[on-message] ' + stderr.trim());
+        }
+      });
+    }
   });
 
   await new Promise(() => {});
@@ -855,8 +906,11 @@ async function main() {
     console.log('  node chat.js add <名字> <OpenID>        添加联系人（存入 Roster）');
     console.log('  node chat.js contacts                   查看通讯录（读取 Roster）');
     console.log('  node chat.js send <名字|OpenID> <消息>  发送消息');
+    console.log('    --from <你的名字>                     附加 From/To 消息头（多 CC 场景）');
     console.log('  node chat.js check                      查看新消息');
     console.log('  node chat.js listen                     实时监听（消息自动弹出）');
+    console.log('  node chat.js listen --on-message "cmd"  收到消息时执行命令');
+    console.log('    模板变量: {from} {openid} {content} {time}');
     console.log('  node chat.js publish <名字>             发布到黄页（让朋友搜到你）');
     console.log('  node chat.js discover <名字>            搜索朋友的 OpenID');
     console.log('  node chat.js unpublish                  从黄页移除');
@@ -891,20 +945,35 @@ async function main() {
         break;
       case 'send': {
         const target = args[1];
+        // Parse --from flag
+        let fromName = null;
+        const fromIdx = args.indexOf('--from');
+        if (fromIdx >= 0 && fromIdx + 1 < args.length) {
+          fromName = args[fromIdx + 1];
+          // Remove --from and its value from args before building message
+          args.splice(fromIdx, 2);
+        }
         const msg = args.slice(2).join(' ');
         if (!target || !msg) {
-          console.log('用法: node chat.js send <名字|OpenID> <消息>');
+          console.log('用法: node chat.js send <名字|OpenID> <消息> [--from <你的名字>]');
           break;
         }
-        await cmdSend(target, msg);
+        await cmdSend(target, msg, fromName);
         break;
       }
       case 'check':
         await cmdCheck();
         break;
-      case 'listen':
-        await cmdListen();
+      case 'listen': {
+        // Parse --on-message flag
+        let onMsg = null;
+        const onMsgIdx = args.indexOf('--on-message');
+        if (onMsgIdx >= 0 && onMsgIdx + 1 < args.length) {
+          onMsg = args[onMsgIdx + 1];
+        }
+        await cmdListen(onMsg);
         break;
+      }
       case 'publish':
         await cmdPublish(args[1]);
         break;
