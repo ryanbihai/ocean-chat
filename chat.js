@@ -143,9 +143,14 @@ async function cmdSetup() {
     const roster = getRoster();
     const contacts = await roster.list();
 
-    console.log('已注册。');
+    console.log('🛡️  身份已存在 — 不会重新注册。');
+    console.log('');
     console.log('你的 OpenID: ' + existing.openid);
     console.log('(简写: ' + shortId(existing.openid) + ')');
+    console.log('存储位置: ' + CRED_FILE);
+    console.log('');
+    console.log('⚠️  绝对不要删除这个文件！删除后 OpenID 永久作废，');
+    console.log('   所有联系人都会发消息到死地址。');
     console.log('');
 
     if (contacts.length > 0) {
