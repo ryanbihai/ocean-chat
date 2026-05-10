@@ -1,7 +1,7 @@
 ---
 name: ocean-chat
 description: OceanBus-powered P2P messaging, shared address book, 1v1 meetup negotiation, and conversation threading for AI agents. Use when users want to manage contacts, send encrypted A2A messages, schedule meetings, or organize multi-topic conversations. Zero deployment, 5-minute setup. npm install oceanbus.
-version: 2.10.2
+version: 2.11.0
 metadata:
   openclaw:
     requires:
@@ -517,8 +517,10 @@ node chat.js contacts                     # 列出通讯录
 
 # 消息
 node chat.js send <名字|OpenID> <消息>     # 发消息（自动 Roster 解析）
+	                                         # --from <你的名字>  附加 From/To 消息头（多 CC 场景）
 node chat.js check                        # 查看新消息
 node chat.js listen                       # 实时监听
+	node chat.js listen --on-message "cmd"    # 监听 + 收到消息时执行命令 ({from} {openid} {content} {time})
 
 # 黄页
 node chat.js publish <名字>               # 发布到黄页
