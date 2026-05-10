@@ -170,12 +170,21 @@ export class OceanBus {
 
     const ob = new OceanBus(config, keyStore);
 
-    // Load persisted identity if not provided via config
-    if (!config.identity?.api_key) {
-      const saved = await keyStore.load();
-      if (saved) {
-        ob.identity.fromState(saved);
+    // Always load persisted identity from keyStore.
+    // The saved OpenID must be reused — calling whoami() generates a new
+    // anti-tracking nonce each time, which breaks service-side reachability.
+    const saved = await keyStore.load();
+    if (saved) {
+      if (!config.identity?.api_key) {
+        ob.identity.loadFromPersistedState(saved);
+      } else if (saved.openid) {
+        ob.identity.setPersistedOpenId(saved.openid);
       }
+    }
+
+    // OpenID passed directly in config (e.g. from chat.js credentials file)
+    if (config.identity?.openid) {
+      ob.identity.setPersistedOpenId(config.identity.openid);
     }
 
     // Load persisted blocklist
@@ -281,7 +290,7 @@ export class OceanBus {
     const data = await this.identity.register();
     // Fetch and persist OpenID immediately
     try { await this.identity.whoami(); } catch {}
-    await this.keyStore.save(this.identity.toState());
+    await this.keyStore.save(this.identity.exportState());
     // Bootstrap default contacts (YP + Reputation)
     await this.bootstrapRoster().catch(() => {});
     return data;
@@ -290,7 +299,7 @@ export class OceanBus {
   async whoami(): Promise<{ agent_id: string; openid: string }> {
     const data = await this.identity.whoami();
     // Persist newly fetched OpenID
-    if (data.my_openid) await this.keyStore.save(this.identity.toState());
+    if (data.my_openid) await this.keyStore.save(this.identity.exportState());
     return { agent_id: this.identity.getAgentId()!, openid: data.my_openid };
   }
 
@@ -568,7 +577,7 @@ export class OceanBus {
     await this.cursor.save();
     await this.blocklist.saveLocal();
     if (this.identity.getAgentId()) {
-      await this.keyStore.save(this.identity.toState());
+      await this.keyStore.save(this.identity.exportState());
     }
   }
 }

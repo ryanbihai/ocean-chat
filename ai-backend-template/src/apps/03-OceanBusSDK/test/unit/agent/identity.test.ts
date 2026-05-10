@@ -81,8 +81,8 @@ describe('AgentIdentityManager', () => {
     });
     await identity.getOpenId(); // populate cache
 
-    // Simulate: fromState sets cache to null, not empty string
-    identity.fromState({ agent_id: 'id', api_key: 'key', extra_keys: [] });
+    // Simulate: loadFromPersistedState sets cache to null, not empty string
+    identity.loadFromPersistedState({ agent_id: 'id', api_key: 'key', extra_keys: [] });
     expect(identity.getCachedOpenId()).toBeNull();
 
     // Should make API call since cache is null
@@ -113,20 +113,20 @@ describe('AgentIdentityManager', () => {
     expect(mockHttp.post).not.toHaveBeenCalled();
   });
 
-  it('toState / fromState roundtrip', () => {
+  it('toState / loadFromPersistedState roundtrip', () => {
     identity.updateCredential('sk_key', 'agent-id');
     identity.trackExtraKey({ key_id: 'extra1', api_key: 'sk_extra' });
 
-    const state = identity.toState();
+    const state = identity.exportState();
     expect(state.extra_keys).toHaveLength(1);
 
     const newId = new AgentIdentityManager(mockHttp);
-    newId.fromState(state);
+    newId.loadFromPersistedState(state);
     expect(newId.getAgentId()).toBe('agent-id');
     expect(newId.getApiKey()).toBe('sk_key');
   });
 
   it('toState throws without credentials', () => {
-    expect(() => identity.toState()).toThrow(OceanBusError);
+    expect(() => identity.exportState()).toThrow(OceanBusError);
   });
 });

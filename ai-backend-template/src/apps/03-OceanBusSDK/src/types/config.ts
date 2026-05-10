@@ -39,6 +39,7 @@ export interface OceanBusConfig {
   identity?: {
     agent_id: string;
     api_key: string;
+    openid?: string;
   };
   keyStore: KeyStoreConfig;
   http: HttpConfig;
@@ -53,5 +54,5 @@ type DeepPartial<T> = T extends object ? {
 } : T;
 
 export type PartialConfig = DeepPartial<OceanBusConfig> & {
-  identity?: { agent_id: string; api_key: string };
+  identity?: { agent_id: string; api_key: string; openid?: string };
 };

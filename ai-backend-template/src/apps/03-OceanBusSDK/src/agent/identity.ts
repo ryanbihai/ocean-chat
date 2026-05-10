@@ -14,6 +14,12 @@ export class AgentIdentityManager {
   private extraKeys: ApiKeyData[] = [];
   private openidCache: string | null = null;
 
+  // The OpenID that was saved from a previous session and reloaded on startup.
+  // For service-side agents this MUST be used instead of calling whoami(),
+  // because whoami() generates a NEW OpenID each call (anti-tracking nonce).
+  // Service agents need a stable address so others can reach them.
+  private persistedOpenId: string | null = null;
+
   constructor(http: HttpClient, apiKey?: string, agentId?: string) {
     this.http = http;
     this.apiKey = apiKey || null;
@@ -30,6 +36,17 @@ export class AgentIdentityManager {
 
   getCachedOpenId(): string | null {
     return this.openidCache;
+  }
+
+  // Set the OpenID loaded from persistent storage — this prevents whoami()
+  // from being called unnecessarily, which would generate a new anti-tracking
+  // nonce and break service-side reachability.
+  setPersistedOpenId(openid: string): void {
+    this.persistedOpenId = openid;
+  }
+
+  getPersistedOpenId(): string | null {
+    return this.persistedOpenId;
   }
 
   updateCredential(apiKey: string, agentId?: string): void {
@@ -66,22 +83,21 @@ export class AgentIdentityManager {
     return data;
   }
 
-  private savedOpenid: string | null = null;
-
   async whoami(): Promise<OpenIDData> {
     this.ensureAuth();
     const res = await this.http.get<OpenIDData>('/agents/me', { apiKey: this.apiKey! });
     this.openidCache = res.data.my_openid;
-    this.savedOpenid = res.data.my_openid;
+    this.persistedOpenId = res.data.my_openid;
     return res.data;
   }
 
-  getSavedOpenid(): string | null {
-    return this.savedOpenid;
-  }
-
+  // Returns the OpenID that should be used for receiving messages.
+  // Priority: persisted (from keyStore) > cached > fresh whoami() call.
+  // IMPORTANT: Service-side agents MUST use the persisted OpenID. Calling
+  // whoami() generates a new anti-tracking nonce each time — useful for
+  // consumer privacy but breaks service reachability if called repeatedly.
   async getOpenId(): Promise<string> {
-    if (this.savedOpenid !== null) return this.savedOpenid;
+    if (this.persistedOpenId !== null) return this.persistedOpenId;
     if (this.openidCache !== null) return this.openidCache;
     const data = await this.whoami();
     return data.my_openid;
@@ -89,30 +105,30 @@ export class AgentIdentityManager {
 
   async ensureRegistered(): Promise<AgentState> {
     if (this.agentId && this.apiKey) {
-      return this.toState();
+      return this.exportState();
     }
     const reg = await this.register();
-    return this.toState();
+    return this.exportState();
   }
 
-  toState(): AgentState {
+  exportState(): AgentState {
     if (!this.agentId || !this.apiKey) {
       throw new OceanBusError('Agent identity not initialized');
     }
     return {
       agent_id: this.agentId,
       api_key: this.apiKey,
-      openid: this.savedOpenid || this.openidCache || undefined,
+      openid: this.persistedOpenId || this.openidCache || undefined,
       extra_keys: this.extraKeys,
     };
   }
 
-  fromState(state: AgentState): void {
+  loadFromPersistedState(state: AgentState): void {
     this.agentId = state.agent_id;
     this.apiKey = state.api_key;
     this.extraKeys = state.extra_keys || [];
     this.openidCache = state.openid || null;
-    this.savedOpenid = state.openid || null;
+    this.persistedOpenId = state.openid || null;
   }
 
   trackExtraKey(key: ApiKeyData): void {
