@@ -674,21 +674,39 @@ async function cmdListen(onMessage) {
 
     // --on-message hook (use parsed body, not raw content)
     if (onMessage) {
-      const hookFrom = msgFrom || fromName || msg.from_openid;
-      const escaped = (s) => s.replace(/"/g, '\\"');
-      const cmd = onMessage
-        .replace(/\{from\}/g, escaped(hookFrom))
-        .replace(/\{openid\}/g, escaped(msg.from_openid))
-        .replace(/\{content\}/g, escaped(body))
-        .replace(/\{time\}/g, escaped(time));
-      exec(cmd, (err, stdout, stderr) => {
-        if (err) {
-          console.error('[on-message] 钩子执行失败: ' + err.message);
-        } else {
-          if (stdout.trim()) console.log('[on-message] ' + stdout.trim());
-          if (stderr.trim()) console.error('[on-message] ' + stderr.trim());
-        }
-      });
+      if (onMessage === 'task-file') {
+        // Built-in: queue task to file — no claude CLI, no escaping issues
+        const taskQueuePath = path.join(DATA_DIR, 'task-queue.json');
+        let queue = [];
+        try { queue = JSON.parse(fs.readFileSync(taskQueuePath, 'utf-8')); } catch (_) {}
+        queue.push({
+          from: msgFrom || fromName || msg.from_openid,
+          openid: msg.from_openid,
+          content: body,
+          time: time,
+          received: new Date().toISOString(),
+          status: 'pending'
+        });
+        fs.writeFileSync(taskQueuePath, JSON.stringify(queue, null, 2));
+        console.log('[task-file] 任务已入队: ' + taskQueuePath);
+      } else {
+        // Legacy: execute custom command with template substitution
+        const hookFrom = msgFrom || fromName || msg.from_openid;
+        const escaped = (s) => s.replace(/"/g, '\\"');
+        const cmd = onMessage
+          .replace(/\{from\}/g, escaped(hookFrom))
+          .replace(/\{openid\}/g, escaped(msg.from_openid))
+          .replace(/\{content\}/g, escaped(body))
+          .replace(/\{time\}/g, escaped(time));
+        exec(cmd, (err, stdout, stderr) => {
+          if (err) {
+            console.error('[on-message] 钩子执行失败: ' + err.message);
+          } else {
+            if (stdout.trim()) console.log('[on-message] ' + stdout.trim());
+            if (stderr.trim()) console.error('[on-message] ' + stderr.trim());
+          }
+        });
+      }
     }
   });
 
@@ -917,6 +935,54 @@ async function cmdThreadReopen(threadId) {
   console.log('🔄 已重开线程: ' + t.subject);
 }
 
+// ── Task Queue ──────────────────────────────────────────────────────────────
+
+function cmdTasks(action) {
+  const taskQueuePath = path.join(DATA_DIR, 'task-queue.json');
+  if (!fs.existsSync(taskQueuePath)) {
+    console.log('任务队列为空。');
+    return;
+  }
+
+  let queue;
+  try { queue = JSON.parse(fs.readFileSync(taskQueuePath, 'utf-8')); } catch (_) {
+    console.log('任务队列为空。');
+    return;
+  }
+
+  if (action === 'clear') {
+    fs.unlinkSync(taskQueuePath);
+    console.log('已清空任务队列。');
+    return;
+  }
+
+  const pending = queue.filter(t => t.status === 'pending');
+  const done = queue.filter(t => t.status === 'done');
+
+  if (queue.length === 0) {
+    console.log('任务队列为空。');
+    return;
+  }
+
+  if (pending.length > 0) {
+    console.log('待处理任务 (' + pending.length + '):\n');
+    pending.forEach((t, i) => {
+      console.log('  [' + (i + 1) + '] 来自: ' + t.from + ' (' + t.time + ')');
+      console.log('      ' + t.content.slice(0, 80) + (t.content.length > 80 ? '...' : ''));
+      console.log('');
+    });
+  }
+
+  if (done.length > 0) {
+    console.log('已完成 (' + done.length + '):');
+    done.forEach(t => {
+      console.log('  ✓ ' + t.from + ' — ' + t.content.slice(0, 60) + (t.content.length > 60 ? '...' : ''));
+    });
+    console.log('');
+    console.log('清空已完成: node chat.js tasks clear');
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -942,6 +1008,8 @@ async function main() {
     console.log('  node chat.js listen                     实时监听（消息自动弹出）');
     console.log('  node chat.js listen --on-message "cmd"  收到消息时执行命令');
     console.log('    模板变量: {from} {openid} {content} {time}');
+    console.log('    --on-message task-file                 内置模式：写入任务队列（推荐）');
+    console.log('  node chat.js tasks [clear]              查看/清空任务队列');
     console.log('  node chat.js publish <名字>             发布到黄页（让朋友搜到你）');
     console.log('  node chat.js discover <名字>            搜索朋友的 OpenID');
     console.log('  node chat.js unpublish                  从黄页移除');
@@ -1036,6 +1104,9 @@ async function main() {
       case 'availability':
         await cmdAvailability(args.slice(1));
         break;
+      case 'tasks':
+        cmdTasks(args[1]);
+        break;
       case 'thread': {
         const sub = args[1];
         if (sub === 'create') {
@@ -1067,13 +1138,12 @@ async function main() {
         const ccName = args[1] || ('CC-' + path.basename(process.cwd()));
         fs.mkdirSync(DATA_DIR, { recursive: true });
         const scriptPath = path.resolve(__filename);
-        // Prompt must avoid -- prefixed words (claude CLI parses them as flags)
-        const onMsgCmd = `claude -p "收到小龙虾的任务: {content}。完成后立即用下面的命令汇报结果: node ${scriptPath} send Bridge from ${ccName} 把关键发现、修改的文件、执行结果写清楚。"`;
+        // Use built-in task-file mode — no claude CLI, no escaping issues
         const config = {
           apps: [{
             name: `ob-${ccName.replace(/^CC-/, '')}`,
             script: scriptPath,
-            args: `--data-dir ${DATA_DIR} listen --on-message ${JSON.stringify(onMsgCmd)}`,
+            args: `--data-dir ${DATA_DIR} listen --on-message task-file`,
           }]
         };
         const configPath = path.join(DATA_DIR, 'ecosystem.config.json');
