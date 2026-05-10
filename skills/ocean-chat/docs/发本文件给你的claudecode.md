@@ -4,9 +4,12 @@
 
 **步骤：**
 
+0. 获取 ocean-chat（如果还没有）：
+   - `git clone https://github.com/ryanbihai/ocean-chat.git && cd ocean-chat && npm install`
+   - 已经装过就跳过
+
 1. 注册本窗口的独立 OceanBus 身份：
-   - 找到 ocean-chat 目录下的 chat.js（如 `skills/ocean-chat/chat.js`，搜一下）
-   - 运行：`node chat.js --data-dir .oceanbus-cc setup`
+   - 在 ocean-chat 目录下运行：`node chat.js --data-dir .oceanbus-cc setup`
    - `--data-dir .oceanbus-cc` 确保每个项目窗口有独立身份，不会跟其他 CC 窗口串信
    - 用 `node chat.js --data-dir .oceanbus-cc whoami` 读取 OpenID
 
