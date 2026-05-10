@@ -1,7 +1,7 @@
 ---
 name: ocean-chat
 description: OceanBus-powered P2P messaging, shared address book, 1v1 meetup negotiation, and conversation threading for AI agents. Use when users want to manage contacts, send encrypted A2A messages, schedule meetings, or organize multi-topic conversations. Zero deployment, 5-minute setup. npm install oceanbus.
-version: 2.10.1
+version: 2.10.2
 metadata:
   openclaw:
     requires:
@@ -239,16 +239,7 @@ node chat.js add <名字>                # 先加名字，OpenID 后续补
 
 ### 1.4 修改联系人
 
-```bash
-# 改标签（LLM 自动维护，也可以手动）
-node -e "const {RosterService}=require('oceanbus');new RosterService().updateTags('laowang',['friend','college','sichuan-food'])"
-
-# 加别名
-node -e "const {RosterService}=require('oceanbus');new RosterService().addAlias('laowang','王总')"
-
-# 改备注
-node -e "const {RosterService}=require('oceanbus');new RosterService().update('laowang',{notes:'大学同学，喜欢川菜，住在朝阳'})"
-```
+可通过 RosterService 修改标签、别名、备注。标签由 LLM 自动维护，也可手动调整。详见末尾命令参考。
 
 ### 1.5 合并重复联系人
 
@@ -264,33 +255,29 @@ node -e "const {RosterService}=require('oceanbus');new RosterService().update('l
   → "已合并。老王现在有 2 个 Agent 地址，标签: friend, colleague"
 ```
 
-```bash
-# 查看重复提示
-node -e "const {RosterService}=require('oceanbus');new RosterService().getDuplicateHints().then(h=>h.forEach(x=>console.log(x.contactA,'+',x.contactB,'—',x.reason,'(',x.confidence,')')))"
-
-# 合并
-node -e "const {RosterService}=require('oceanbus');new RosterService().merge('laowang','wangcai')"
-
-# 不是同一个人（消除提示）
-node -e "const {RosterService}=require('oceanbus');new RosterService().dismissDuplicateHint('laowang','wangcai')"
-```
+重复联系人和消除提示通过 RosterService 方法操作，详见末尾命令参考。
 
 ### 1.6 AutoDiscovery 审核
 
 新名字出现 3 次以上会自动进入待审核队列。首次使用或定期检查：
 
-```bash
-# 查看待审核列表
-node -e "const {RosterService}=require('oceanbus');new RosterService().getPending().then(p=>p.forEach(x=>console.log(x.name,'—','出现',x.mentionCount,'次')))"
-
-# 通过（加为联系人）
-node -e "const {RosterService}=require('oceanbus');new RosterService().approvePending('auto_lili')"
-
-# 拒绝（加入忽略列表）
-node -e "const {RosterService}=require('oceanbus');new RosterService().rejectPending('auto_lili')"
-```
+待审核列表、通过、拒绝操作均通过 RosterService 完成，详见末尾命令参考。
 
 **主动审核时机**：用户说"看看通讯录"、新对话开始、`getDuplicateHints()` 返回非空时。
+
+### Roster SDK 速查
+
+以下 one-liner 覆盖高级 Roster 操作（通过 `node -e` 直接调 SDK）：
+
+搜索 `node -e "const {RosterService}=require('oceanbus');new RosterService().search('老王')..."`
+合并 `node -e "const {RosterService}=require('oceanbus');new RosterService().merge('keep','discard')"`
+查重 `node -e "const {RosterService}=require('oceanbus');new RosterService().getDuplicateHints()..."`
+待审 `node -e "const {RosterService}=require('oceanbus');new RosterService().getPending()..."`
+改标签 `node -e "const {RosterService}=require('oceanbus');new RosterService().updateTags(name,tags)"`
+改备注 `node -e "const {RosterService}=require('oceanbus');new RosterService().update(name,{notes:'...'})"`
+加别名 `node -e "const {RosterService}=require('oceanbus');new RosterService().addAlias(name,'alias')"`
+
+完整参数见前文各小节，或运行 `node -e "require('oceanbus').RosterService"` 查看。
 
 ---
 
@@ -551,21 +538,6 @@ node chat.js thread show <id>              # 查看线程详情
 node chat.js thread resolve <id>           # 结束线程
 node chat.js thread reopen <id>            # 重开已结束线程
 ```
-
-**高级 Roster 操作**（one-liner）：
-
-```bash
-# 搜索
-node -e "const {RosterService}=require('oceanbus');new RosterService().search('老王').then(r=>console.log(JSON.stringify(r)))"
-
-# 合并
-node -e "const {RosterService}=require('oceanbus');new RosterService().merge('laowang','wangcai')"
-
-# 查看重复提示
-node -e "const {RosterService}=require('oceanbus');new RosterService().getDuplicateHints().then(h=>h.forEach(x=>console.log(x.contactA,'+',x.contactB,'—',x.reason)))"
-```
-
----
 
 ## 七、实时通信
 
