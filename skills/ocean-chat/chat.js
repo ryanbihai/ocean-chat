@@ -1232,6 +1232,28 @@ async function cmdConnectCC() {
   console.log('OCEAN_CHAT_DIR=' + oceanChatAbs);
   console.log('PROJECT_ROOT=' + (projectRoot || '').replace(/\\/g, '/'));
   console.log('CRON_CMD=' + cronCmd);
+  // 4. Cron setup instruction for CC
+  const ccNameSlug = ccName.replace(/^CC-/, '').replace(/[^a-zA-Z0-9_-]/g, '-');
+  console.log('');
+  console.log('─── 告诉你的 CC ───');
+  console.log('请创建分钟级定时任务，使用以下信息替换 <...> 占位符：');
+  console.log('');
+  console.log('  CronCreate: * * * * *');
+  console.log('  CRON_CMD: ' + cronCmd);
+  console.log('  DATA_DIR: ' + dataAbs);
+  console.log('  CC_NAME: ' + ccName);
+  console.log('');
+  console.log('定时任务提示词：');
+  console.log('---CUT-HERE---');
+  console.log('检查 OceanBus 是否有来自小龙虾的新消息。');
+  console.log('');
+  console.log('执行：' + cronCmd);
+  console.log('');
+  console.log('有消息时：展示内容、执行任务、用 node chat.js --data-dir ' + dataAbs + ' send 小龙虾 --from ' + ccName + ' "结果"');
+  console.log('没有消息时：仅输出"。"，不要做任何工具调用。');
+  console.log('---CUT-HERE---');
+  console.log('─── 以上告诉 CC ───');
+
   console.log('');
   console.log('─── 以下发给小龙虾 ───');
   console.log(pairingMsg);
