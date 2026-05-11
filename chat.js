@@ -150,7 +150,7 @@ async function cmdSetup() {
     console.log('🛡️  身份已存在 — 不会重新注册。');
     console.log('');
     console.log('你的 OpenID: ' + existing.openid);
-    console.log('(简写: ' + shortId(existing.openid) + ')');
+    console.log('你的前5位: ' + existing.openid.slice(0, 5) + '  ← 加联系人时告诉对方这个');
     console.log('存储位置: ' + CRED_FILE);
     console.log('');
     console.log('⚠️  绝对不要删除这个文件！删除后 OpenID 永久作废，');
@@ -197,6 +197,7 @@ async function cmdSetup() {
   console.log('注册成功！你的 OceanBus 地址:');
   console.log('');
   console.log('  ' + openid);
+  console.log('  前5位: ' + openid.slice(0, 5) + '  ← 加联系人时告诉对方这个');
   console.log('');
   console.log('现在你可以:');
   console.log('  ① 把这个 OpenID 发给朋友');
@@ -252,7 +253,14 @@ async function cmdAdd(name, openid) {
     source: 'chat',
   });
 
-  console.log('已添加联系人: ' + name + ' (' + shortId(openid) + ')');
+  const creds = loadCredentials();
+  const myOpenid5 = creds ? creds.openid.slice(0, 5) : '?????';
+  const theirOpenid5 = openid.slice(0, 5);
+
+  console.log('已添加联系人: ' + name);
+  console.log('  对方前5位: ' + theirOpenid5);
+  console.log('  你的前5位: ' + myOpenid5 + '  ← 发给对方核对');
+  console.log('');
   console.log('现在可以用名字发消息: node chat.js send ' + name + ' <消息>');
 }
 
@@ -319,7 +327,7 @@ async function cmdShow(name) {
     : '从未联系';
   console.log('名字: ' + c.name);
   console.log('OpenID: ' + openid);
-  console.log('简写: ' + shortId(openid));
+  console.log('前5位: ' + openid.slice(0, 5));
   console.log('标签: ' + (c.tags.length > 0 ? c.tags.join(', ') : '(无)'));
   console.log('别名: ' + (c.aliases.length > 0 ? c.aliases.join(', ') : '(无)'));
   console.log('备注: ' + (c.notes || '(无)'));
