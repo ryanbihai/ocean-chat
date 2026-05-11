@@ -405,12 +405,11 @@ async function cmdSend(target, message, fromName) {
     }
   }
 
-  // Build message with optional From/To headers
-  let body = message;
-  if (fromName) {
-    const sep = '─'.repeat(32);
-    body = `From: ${fromName}\nTo: ${displayName}\n${sep}\n${message}`;
-  }
+  // Always prepend debug routing headers (from/to + OpenID first 5 chars)
+  const senderName = fromName || os.userInfo().username || 'unknown';
+  const senderOpenid5 = creds.openid ? creds.openid.slice(0, 5) : '?????';
+  const targetOpenid5 = openid ? openid.slice(0, 5) : '?????';
+  const body = `from ${senderName} ${senderOpenid5}\nto ${displayName} ${targetOpenid5}\n${message}`;
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
@@ -706,7 +705,7 @@ async function cmdListen(onMessage) {
     // Auto-manage Roster: add new contacts, update stale OpenIDs
     if (!contact) {
       let autoName = null;
-      const fromMatch = msg.content.match(/^From:\s*(.+)$/m);
+      const fromMatch = msg.content.match(/^from (\S+) (\S+)$/m);
       if (fromMatch) autoName = fromMatch[1].trim();
       if (!autoName) autoName = '小龙虾';
 
@@ -739,19 +738,15 @@ async function cmdListen(onMessage) {
       : msg.from_openid;
     const time = formatTime(msg.created_at);
 
-    // Parse optional From/To headers from message body
-    const headerRE = /^From:\s*(.+)\nTo:\s*(.+)\n([-─]{8,})\n/;
+    // Parse debug routing headers from message body
+    const headerRE = /^from (\S+) (\S+)\nto (\S+) (\S+)\n/;
     const headerMatch = msg.content.match(headerRE);
     let body = msg.content;
     let msgFrom = null, msgTo = null;
     if (headerMatch) {
-      msgFrom = headerMatch[1].trim();
-      msgTo = headerMatch[2].trim();
+      msgFrom = headerMatch[1];
+      msgTo = headerMatch[3];
       body = msg.content.slice(headerMatch[0].length);
-      // Update fromName for --on-message hook: prefer header From over Roster
-      if (!fromName && msgFrom) {
-        // Roster may not have this contact yet; use header as fallback
-      }
     }
 
     // Handle thread protocol
@@ -1109,7 +1104,8 @@ async function main() {
     console.log('  node chat.js rename <名字> <新名字>     重命名联系人');
     console.log('  node chat.js tag <名字> <标签1,标签2>   设置联系人标签');
     console.log('  node chat.js send <名字|OpenID> <消息>  发送消息');
-    console.log('    --from <你的名字>                     附加 From/To 消息头（多 CC 场景）');
+    console.log('    --from <你的名字>                     指定发送者名字（默认用系统用户名）');
+    console.log('    每条消息自动附加: from <名> <OpenID前5> / to <名> <OpenID前5>');
     console.log('  node chat.js check                      查看新消息');
     console.log('  node chat.js listen                     实时监听（消息自动弹出）');
     console.log('  node chat.js listen --on-message "cmd"  收到消息时执行命令');
