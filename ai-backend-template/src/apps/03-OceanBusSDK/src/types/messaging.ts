@@ -12,6 +12,7 @@ export interface SyncData {
 }
 
 export interface SendPayload {
+  from_openid: string;
   to_openid: string;
   client_msg_id: string;
   content: string;

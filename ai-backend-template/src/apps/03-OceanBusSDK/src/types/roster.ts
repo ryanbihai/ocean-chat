@@ -14,7 +14,7 @@ export type AppData = Record<string, unknown>;
 
 // ── Contact ──
 
-export type ContactSource = 'manual' | 'yellow-pages' | 'auto-discovery' | 'chat';
+export type ContactSource = 'manual' | 'yellow-pages' | 'auto-discovery' | 'chat' | 'system';
 export type ContactStatus = 'active' | 'pending' | 'archived';
 
 /** Rich source tracking — tells us WHERE the contact came from and WHEN. */

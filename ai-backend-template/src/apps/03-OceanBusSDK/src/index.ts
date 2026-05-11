@@ -106,7 +106,7 @@ export class OceanBus {
     this.keys = new ApiKeyManager(this.http, () => this.identity.getApiKey());
 
     // Messaging
-    this.messaging = new MessagingService(this.http, () => this.identity.getApiKey());
+    this.messaging = new MessagingService(this.http, () => this.identity.getApiKey(), () => this.identity.getPersistedOpenId());
 
     // Blocklist
     this.blocklist = new BlocklistManager(this.http, () => this.identity.getApiKey());

@@ -9,10 +9,12 @@ const MAX_CONTENT_LENGTH = 128000;
 export class MessagingService {
   private http: HttpClient;
   private getApiKey: () => string | null;
+  private getOpenId: () => string | null;
 
-  constructor(http: HttpClient, getApiKey: () => string | null) {
+  constructor(http: HttpClient, getApiKey: () => string | null, getOpenId: () => string | null) {
     this.http = http;
     this.getApiKey = getApiKey;
+    this.getOpenId = getOpenId;
   }
 
   async send(toOpenid: string, content: string, clientMsgId?: string): Promise<void> {
@@ -29,6 +31,7 @@ export class MessagingService {
     }
 
     const payload: SendPayload = {
+      from_openid: this.getOpenId() || '',
       to_openid: toOpenid,
       client_msg_id: clientMsgId || generateClientMsgId(),
       content,
