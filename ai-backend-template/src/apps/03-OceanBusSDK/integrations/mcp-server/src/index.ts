@@ -530,7 +530,156 @@ server.tool(
 );
 
 // ============================================================
-// 第4步：启动服务器
+// 第4步：Roster 通讯录管理
+// ============================================================
+
+// Import RosterService from SDK
+import { RosterService } from "oceanbus";
+
+function getRoster() {
+  return new RosterService();
+}
+
+// ----------------------------------------------------------
+// 工具9：添加联系人
+// ----------------------------------------------------------
+
+server.tool(
+  "oceanbus_add_contact",
+  "添加一个联系人到 OceanBus 通讯录。可以用名字代替 OpenID 发消息。",
+  {
+    name: z.string().describe("联系人名字"),
+    openid: z.string().describe("联系人的 OpenID"),
+    tags: z.array(z.string()).optional().describe("标签（可选）"),
+  },
+  async ({ name, openid, tags }) => {
+    telem.record("add_contact");
+    try {
+      const roster = getRoster();
+      const agent = { agentId: "", openId: openid, purpose: "OceanBus 联系人", isDefault: true };
+      await roster.add({ name, agents: [agent], tags: tags || [], source: "manual" });
+      return {
+        content: [{ type: "text", text: JSON.stringify({
+          success: true,
+          message: `已添加联系人: ${name}`,
+        }, null, 2) }],
+      };
+    } catch (error: any) {
+      return { content: [{ type: "text", text: JSON.stringify({ success: false, error: error.message }, null, 2) }] };
+    }
+  }
+);
+
+// ----------------------------------------------------------
+// 工具10：查看通讯录
+// ----------------------------------------------------------
+
+server.tool(
+  "oceanbus_list_contacts",
+  "查看 OceanBus 通讯录中的所有联系人。返回名字、OpenID、标签、最后联系时间。",
+  {},
+  async () => {
+    telem.record("list_contacts");
+    try {
+      const roster = getRoster();
+      const contacts = await roster.list();
+      return {
+        content: [{ type: "text", text: JSON.stringify({
+          success: true,
+          count: contacts.length,
+          contacts: contacts.map(c => ({
+            name: c.name,
+            openid: c.agents[0]?.openId || "",
+            tags: c.tags,
+            lastContact: c.lastContactAt,
+            source: c.source,
+          })),
+        }, null, 2) }],
+      };
+    } catch (error: any) {
+      return { content: [{ type: "text", text: JSON.stringify({ success: false, error: error.message }, null, 2) }] };
+    }
+  }
+);
+
+// ----------------------------------------------------------
+// 工具11：查看联系人详情
+// ----------------------------------------------------------
+
+server.tool(
+  "oceanbus_show_contact",
+  "查看指定联系人的详细信息：OpenID、标签、别名、备注、最后联系时间。",
+  {
+    name: z.string().describe("联系人名字（模糊搜索）"),
+  },
+  async ({ name }) => {
+    telem.record("show_contact");
+    try {
+      const roster = getRoster();
+      const result = await roster.search(name);
+      if (result.exact.length === 0) {
+        return { content: [{ type: "text", text: JSON.stringify({
+          success: false, error: `通讯录中没有: ${name}`,
+        }, null, 2) }] };
+      }
+      const c = await roster.get(result.exact[0].id);
+      if (!c) {
+        return { content: [{ type: "text", text: JSON.stringify({
+          success: false, error: `通讯录中没有: ${name}`,
+        }, null, 2) }] };
+      }
+      return {
+        content: [{ type: "text", text: JSON.stringify({
+          success: true,
+          name: c.name,
+          openid: c.agents[0]?.openId || "",
+          tags: c.tags,
+          aliases: c.aliases,
+          notes: c.notes,
+          lastContact: c.lastContactAt,
+          source: c.source,
+        }, null, 2) }],
+      };
+    } catch (error: any) {
+      return { content: [{ type: "text", text: JSON.stringify({ success: false, error: error.message }, null, 2) }] };
+    }
+  }
+);
+
+// ----------------------------------------------------------
+// 工具12：删除联系人
+// ----------------------------------------------------------
+
+server.tool(
+  "oceanbus_remove_contact",
+  "从通讯录中删除一个联系人。",
+  {
+    name: z.string().describe("要删除的联系人名字"),
+  },
+  async ({ name }) => {
+    telem.record("remove_contact");
+    try {
+      const roster = getRoster();
+      const result = await roster.search(name);
+      if (result.exact.length === 0) {
+        return { content: [{ type: "text", text: JSON.stringify({
+          success: false, error: `通讯录中没有: ${name}`,
+        }, null, 2) }] };
+      }
+      await roster.delete(result.exact[0].id);
+      return {
+        content: [{ type: "text", text: JSON.stringify({
+          success: true, message: `已删除: ${result.exact[0].name}`,
+        }, null, 2) }],
+      };
+    } catch (error: any) {
+      return { content: [{ type: "text", text: JSON.stringify({ success: false, error: error.message }, null, 2) }] };
+    }
+  }
+);
+
+// ============================================================
+// 第5步：启动服务器
 // ============================================================
 
 // ----------------------------------------------------------
@@ -574,9 +723,9 @@ async function main() {
   console.error("[OceanBus MCP] 正在启动...");
   await server.connect(transport);
   console.error("[OceanBus MCP] 已就绪，等待 AI 客户端连接...");
-  console.error("[OceanBus MCP] 可用工具(9个): register, get_openid, send_message,");
+  console.error("[OceanBus MCP] 可用工具(13个): register, get_openid, send_message,");
   console.error("[OceanBus MCP]   check_mailbox, search_yellow_pages, publish_to_yellow_pages, get_agent_card,");
-  console.error("[OceanBus MCP]   query_reputation, stats");
+  console.error("[OceanBus MCP]   query_reputation, add_contact, list_contacts, show_contact, remove_contact, stats");
   console.error(telem.printStats());
 }
 

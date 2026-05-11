@@ -251,6 +251,134 @@ export const oceanbusCheckMailboxTool = tool(
 );
 
 // ============================================================
+// 工具7：添加联系人
+// ============================================================
+
+export const oceanbusAddContactTool = tool(
+  async ({ name, openid, tags }) => {
+    telem.record("add_contact");
+    try {
+      const { RosterService } = await import("oceanbus");
+      const roster = new RosterService();
+      const agent = { agentId: "", openId: openid, purpose: "OceanBus 联系人", isDefault: true };
+      await roster.add({ name, agents: [agent], tags: tags || [], source: "manual" });
+      return JSON.stringify({ success: true, message: `已添加联系人: ${name}` });
+    } catch (error: any) {
+      return JSON.stringify({ success: false, error: error.message });
+    }
+  },
+  {
+    name: "oceanbus_add_contact",
+    description: "添加联系人到 OceanBus 通讯录。之后可以用名字代替 OpenID 发消息。",
+    schema: z.object({
+      name: z.string().describe("联系人名字"),
+      openid: z.string().describe("联系人的 OpenID"),
+      tags: z.array(z.string()).optional().describe("标签"),
+    }),
+  }
+);
+
+// ============================================================
+// 工具8：查看通讯录
+// ============================================================
+
+export const oceanbusListContactsTool = tool(
+  async () => {
+    telem.record("list_contacts");
+    try {
+      const { RosterService } = await import("oceanbus");
+      const roster = new RosterService();
+      const contacts = await roster.list();
+      return JSON.stringify({
+        success: true,
+        count: contacts.length,
+        contacts: contacts.map(c => ({
+          name: c.name,
+          openid: c.agents[0]?.openId || "",
+          tags: c.tags,
+          lastContact: c.lastContactAt,
+        })),
+      });
+    } catch (error: any) {
+      return JSON.stringify({ success: false, error: error.message });
+    }
+  },
+  {
+    name: "oceanbus_list_contacts",
+    description: "查看 OceanBus 通讯录中的所有联系人。",
+  }
+);
+
+// ============================================================
+// 工具9：查看联系人详情
+// ============================================================
+
+export const oceanbusShowContactTool = tool(
+  async ({ name }) => {
+    telem.record("show_contact");
+    try {
+      const { RosterService } = await import("oceanbus");
+      const roster = new RosterService();
+      const result = await roster.search(name);
+      if (result.exact.length === 0) {
+        return JSON.stringify({ success: false, error: `通讯录中没有: ${name}` });
+      }
+      const c = await roster.get(result.exact[0].id);
+      if (!c) {
+        return JSON.stringify({ success: false, error: `通讯录中没有: ${name}` });
+      }
+      return JSON.stringify({
+        success: true,
+        name: c.name,
+        openid: c.agents[0]?.openId || "",
+        tags: c.tags,
+        aliases: c.aliases,
+        notes: c.notes,
+        lastContact: c.lastContactAt,
+      });
+    } catch (error: any) {
+      return JSON.stringify({ success: false, error: error.message });
+    }
+  },
+  {
+    name: "oceanbus_show_contact",
+    description: "查看指定联系人的详细信息。",
+    schema: z.object({
+      name: z.string().describe("联系人名字（支持模糊搜索）"),
+    }),
+  }
+);
+
+// ============================================================
+// 工具10：删除联系人
+// ============================================================
+
+export const oceanbusRemoveContactTool = tool(
+  async ({ name }) => {
+    telem.record("remove_contact");
+    try {
+      const { RosterService } = await import("oceanbus");
+      const roster = new RosterService();
+      const result = await roster.search(name);
+      if (result.exact.length === 0) {
+        return JSON.stringify({ success: false, error: `通讯录中没有: ${name}` });
+      }
+      await roster.delete(result.exact[0].id);
+      return JSON.stringify({ success: true, message: `已删除: ${result.exact[0].name}` });
+    } catch (error: any) {
+      return JSON.stringify({ success: false, error: error.message });
+    }
+  },
+  {
+    name: "oceanbus_remove_contact",
+    description: "从通讯录中删除联系人。",
+    schema: z.object({
+      name: z.string().describe("要删除的联系人名字"),
+    }),
+  }
+);
+
+// ============================================================
 // 便捷导出：所有工具打包在一起
 // ============================================================
 
@@ -261,4 +389,8 @@ export const oceanbusTools: StructuredTool[] = [
   oceanbusGetOpenIdTool,
   oceanbusPublishTool,
   oceanbusCheckMailboxTool,
+  oceanbusAddContactTool,
+  oceanbusListContactsTool,
+  oceanbusShowContactTool,
+  oceanbusRemoveContactTool,
 ];
