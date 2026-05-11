@@ -1256,9 +1256,12 @@ async function cmdConnectCC() {
   console.log('─── 以上告诉 CC ───');
 
   console.log('');
-  console.log('─── 以下发给小龙虾 ───');
+  console.log('═══ 复制下面这段，在微信上发给小龙虾 ═══');
   console.log(pairingMsg);
-  console.log('─── 以上发给小龙虾 ───');
+  console.log('═══ 以上发给小龙虾 ═══');
+  console.log('');
+  console.log('👆 发完后，小龙虾会回复他的 OpenID 前5位让你核对。');
+  console.log('   核对一致后，连接建立。之后你就可以对 CC 说"开始监听"。');
 }
 
 // ── Task Queue ──────────────────────────────────────────────────────────────
