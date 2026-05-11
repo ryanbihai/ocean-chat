@@ -28,6 +28,7 @@ export interface ReverseLookupData {
 
 export interface SendOptions {
   clientMsgId?: string;
+  fromOpenid?: string;
 }
 
 export interface ListenOptions {

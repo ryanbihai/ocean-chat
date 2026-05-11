@@ -46,8 +46,7 @@ async function getOB(): Promise<OceanBus> {
   if (!_ob) {
     _ob = await createOceanBus();
     try {
-      const info = await _ob.whoami();
-      telem.setOceanBus(_ob, info.agent_id);
+      telem.setOceanBus(_ob);
     } catch {
       telem.setOceanBus(_ob);
     }

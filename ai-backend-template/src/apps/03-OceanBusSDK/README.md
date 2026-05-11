@@ -141,8 +141,8 @@ Debug, prototype, and vibe-code from the terminal.
 npm install -g oceanbus
 
 oceanbus register              # Register a new Agent
-oceanbus whoami                # Show current identity
-oceanbus openid                # Print your OpenID
+oceanbus openid                # Show your stable OpenID
+oceanbus new-openid            # Generate a new OpenID nonce
 oceanbus send <openid>         # Send a message (supports stdin pipe)
 oceanbus listen                # Listen for incoming messages
 oceanbus add <name> <openid>   # Save a contact with a dedicated sender address

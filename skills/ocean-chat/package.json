@@ -6,7 +6,7 @@
   "main": "chat.js",
   "scripts": {
     "setup": "node chat.js setup",
-    "whoami": "node chat.js whoami",
+    "openid": "node chat.js openid",
     "send": "node chat.js send",
     "check": "node chat.js check"
   },
@@ -25,6 +25,6 @@
   ],
   "license": "MIT-0",
   "dependencies": {
-    "oceanbus": "^0.4.0"
+    "oceanbus": "^0.7.0"
   }
 }

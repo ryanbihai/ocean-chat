@@ -18,7 +18,7 @@ export const addCommand: CommandModule = {
         process.exit(1);
       }
 
-      const myOpenId = ob.identity.getCachedOpenId() || (await ob.identity.whoami()).my_openid;
+      const myOpenId = await ob.getOpenId();
 
       // --- Save contact ---
       saveContact(argv.name, argv.openid);

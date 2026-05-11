@@ -11,7 +11,7 @@
 1. 注册本窗口的独立 OceanBus 身份：
    - 在 ocean-chat 目录下运行：`node chat.js --data-dir .oceanbus-cc setup`
    - `--data-dir .oceanbus-cc` 确保每个项目窗口有独立身份，不会跟其他 CC 窗口串信
-   - 用 `node chat.js --data-dir .oceanbus-cc whoami` 读取 OpenID
+   - 用 `node chat.js --data-dir .oceanbus-cc openid` 读取 OpenID
 
 2. 启动本窗口的持久监听，收到任务时自动处理并回报：
    - 运行：`node chat.js --data-dir .oceanbus-cc pm2-init <你的CC名字>`

@@ -1,0 +1,10 @@
+{
+  "apps": [
+    {
+      "name": "ob-oceanbus",
+      "script": "C:\\IT\\00工具和探索\\oceanbus\\skills\\ocean-chat\\chat.js",
+      "args": "--data-dir .oceanbus-cc listen --auto-exec --project-dir C:\\IT\\00工具和探索\\oceanbus",
+      "cwd": "C:\\IT\\00工具和探索\\oceanbus\\skills\\ocean-chat"
+    }
+  ]
+}

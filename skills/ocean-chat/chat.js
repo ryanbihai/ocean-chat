@@ -8,7 +8,7 @@
 //
 // Commands:
 //   node chat.js setup                        Register + get your OpenID
-//   node chat.js whoami                       Show your OpenID
+//   node chat.js openid                       Show your OpenID
 //   node chat.js add <name> <openid>          Save a contact to Roster
 //   node chat.js contacts                     List saved contacts (from Roster)
 //   node chat.js show <name>                  Show contact details
@@ -23,7 +23,7 @@
 
 const { createOceanBus, RosterService } = require('oceanbus');
 const threads = require('./threads');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -206,7 +206,7 @@ async function cmdSetup() {
   console.log('  ④ 开始通信！');
 }
 
-async function cmdWhoami() {
+async function cmdOpenId() {
   const creds = loadCredentials();
   if (!creds) {
     console.log('尚未注册。运行: node chat.js setup');
@@ -688,7 +688,7 @@ async function cmdUnpublish() {
   await ob.destroy();
 }
 
-async function cmdListen(onMessage) {
+async function cmdListen(onMessage, autoExec = false, projectDir = null) {
   const creds = loadCredentials();
   if (!creds) { console.log('尚未注册。运行: node chat.js setup'); return; }
 
@@ -701,7 +701,84 @@ async function cmdListen(onMessage) {
 
   const roster = getRoster();
 
-  if (onMessage) {
+  // ── Auto-exec task queue ───────────────────────────────────────────────
+  const taskQueue = [];
+  let running = false;
+
+  async function processQueue() {
+    if (running) return;
+    if (taskQueue.length === 0) return;
+    running = true;
+
+    while (taskQueue.length > 0) {
+      const task = taskQueue.shift();
+      const label = task.fromName || shortId(task.fromOpenid);
+      console.log('[auto-exec] 开始执行: ' + label + ' — ' + task.body.slice(0, 60));
+
+      const prompt = task.body;
+      try {
+        const result = await new Promise((resolve, reject) => {
+          const child = spawn('claude', ['-p', prompt, '--dangerously-skip-permissions'], {
+            cwd: projectDir || process.cwd(),
+            stdio: ['ignore', 'pipe', 'pipe'], // close stdin for headless env
+          });
+          const timer = setTimeout(() => {
+            child.kill();
+            reject(new Error('claude 执行超时 (5 分钟)'));
+          }, 300000);
+
+          let out = '', err = '';
+          child.stdout.on('data', (d) => { out += d; });
+          child.stderr.on('data', (d) => { err += d; });
+          child.on('close', (code) => {
+            clearTimeout(timer);
+            // stderr warnings are non-fatal; only reject on non-zero exit or empty stdout
+            if (code === 0 && out.trim()) {
+              if (err.trim()) console.log('[auto-exec] claude stderr: ' + err.trim().split('\n')[0]);
+              resolve(out.trim());
+            } else {
+              reject(new Error(err.trim() || `claude exited with code ${code}, stdout empty`));
+            }
+          });
+          child.on('error', (e) => {
+            clearTimeout(timer);
+            reject(e);
+          });
+        });
+
+        // Write execution log for visibility
+        const logEntry = {
+          at: new Date().toISOString(),
+          from: label,
+          task: task.body.slice(0, 200),
+          result: result.slice(0, 500),
+        };
+        const logPath = path.join(DATA_DIR, 'exec-log.json');
+        let logArr = [];
+        try { logArr = JSON.parse(fs.readFileSync(logPath, 'utf-8')); } catch (_) {}
+        logArr.push(logEntry);
+        if (logArr.length > 50) logArr = logArr.slice(-50);
+        fs.writeFileSync(logPath, JSON.stringify(logArr, null, 2));
+
+        console.log('[auto-exec] 完成 — 回报 ' + label);
+        console.log('[auto-exec] 日志: ' + logPath);
+        await ob.send(task.fromOpenid, result);
+      } catch (e) {
+        console.error('[auto-exec] 失败: ' + e.message);
+        try {
+          await ob.send(task.fromOpenid, `[CC-oceanbus] 任务执行失败: ${e.message}`);
+        } catch (_) {}
+      }
+    }
+
+    running = false;
+  }
+
+  // ── Status line ─────────────────────────────────────────────────────────
+  if (autoExec) {
+    console.log('[Ocean Chat] 自动执行模式 — 收到消息立即 spawn claude');
+    console.log('  工作目录: ' + (projectDir || process.cwd()));
+  } else if (onMessage) {
     console.log('[Ocean Chat] 实时监听中... 收到消息时会执行: ' + onMessage);
   } else {
     console.log('[Ocean Chat] 实时监听中... 按 Ctrl+C 停止');
@@ -776,6 +853,18 @@ async function cmdListen(onMessage) {
       console.log(protocolDisplay || body);
     }
     console.log('');
+
+    // ── auto-exec mode: queue task and spawn claude ───────────────────────
+    if (autoExec) {
+      taskQueue.push({
+        fromName: fromName || msgFrom,
+        fromOpenid: msg.from_openid,
+        body,
+      });
+      console.log('[auto-exec] 任务已入队 (排队: ' + taskQueue.length + ')');
+      processQueue();
+      return; // auto-exec handles the reply, skip onMessage hooks
+    }
 
     // --on-message hook (use parsed body, not raw content)
     if (onMessage) {
@@ -1104,7 +1193,7 @@ async function main() {
     console.log('');
     console.log('命令:');
     console.log('  node chat.js setup                      注册 + 获取你的 OpenID');
-    console.log('  node chat.js whoami                     查看你的 OpenID');
+    console.log('  node chat.js openid                     查看你的 OpenID');
     console.log('  node chat.js add <名字> <OpenID>        添加联系人（存入 Roster）');
     console.log('  node chat.js contacts                   查看通讯录（读取 Roster）');
     console.log('  node chat.js show <名字>                查看联系人详情');
@@ -1116,6 +1205,8 @@ async function main() {
     console.log('    每条消息自动附加: from <名> <OpenID前5> / to <名> <OpenID前5>');
     console.log('  node chat.js check                      查看新消息');
     console.log('  node chat.js listen                     实时监听（消息自动弹出）');
+    console.log('  node chat.js listen --auto-exec          自动执行模式（收到消息立即 spawn claude 执行）');
+    console.log('    --project-dir <路径>                    claude 工作目录（默认当前目录）');
     console.log('  node chat.js listen --on-message "cmd"  收到消息时执行命令');
     console.log('    模板变量: {from} {openid} {content} {time}');
     console.log('    --on-message task-file                 内置模式：写入任务队列（推荐）');
@@ -1139,8 +1230,9 @@ async function main() {
     console.log('全局选项:');
     console.log('  --data-dir <路径>   使用指定目录存储身份和数据（多 CC 窗口场景）');
     console.log('');
-    console.log('  node chat.js pm2-init <CC名字>         生成 PM2 ecosystem 配置文件（一键启动）');
-    console.log('    pm2 start .oceanbus-cc/ecosystem.config.json  # 然后运行这个');
+    console.log('  node chat.js pm2-init <CC名字>         生成 PM2 配置文件（默认 task-file 模式）');
+    console.log('    --auto-exec                            使用自动执行模式（收到消息 spawn claude）');
+    console.log('    --project-dir <路径>                    claude 工作目录（配合 --auto-exec）');
     return;
   }
 
@@ -1149,8 +1241,12 @@ async function main() {
       case 'setup':
         await cmdSetup();
         break;
+      case 'openid':
+        await cmdOpenId();
+        break;
       case 'whoami':
-        await cmdWhoami();
+        console.error('⚠  "whoami" is deprecated — use "openid" instead.');
+        await cmdOpenId();
         break;
       case 'add':
         await cmdAdd(args[1], args[2]);
@@ -1192,13 +1288,19 @@ async function main() {
         await cmdCheck();
         break;
       case 'listen': {
-        // Parse --on-message flag
+        // Parse --on-message, --auto-exec, --project-dir flags
         let onMsg = null;
         const onMsgIdx = args.indexOf('--on-message');
         if (onMsgIdx >= 0 && onMsgIdx + 1 < args.length) {
           onMsg = args[onMsgIdx + 1];
         }
-        await cmdListen(onMsg);
+        const autoExec = args.includes('--auto-exec');
+        let projectDir = null;
+        const pdIdx = args.indexOf('--project-dir');
+        if (pdIdx >= 0 && pdIdx + 1 < args.length) {
+          projectDir = args[pdIdx + 1];
+        }
+        await cmdListen(onMsg, autoExec, projectDir);
         break;
       }
       case 'publish':
@@ -1260,17 +1362,28 @@ async function main() {
         const ccName = args[1] || ('CC-' + path.basename(process.cwd()));
         fs.mkdirSync(DATA_DIR, { recursive: true });
         const scriptPath = path.resolve(__filename);
-        // Use built-in task-file mode — no claude CLI, no escaping issues
+        const autoExec = args.includes('--auto-exec');
+        let projectDir = process.cwd();
+        const pdIdx2 = args.indexOf('--project-dir');
+        if (pdIdx2 >= 0 && pdIdx2 + 1 < args.length) {
+          projectDir = path.resolve(args[pdIdx2 + 1]);
+        }
+        const listenArgs = autoExec
+          ? `--data-dir ${DATA_DIR} listen --auto-exec --project-dir ${projectDir}`
+          : `--data-dir ${DATA_DIR} listen --on-message task-file`;
         const config = {
           apps: [{
             name: `ob-${ccName.replace(/^CC-/, '')}`,
             script: scriptPath,
-            args: `--data-dir ${DATA_DIR} listen --on-message task-file`,
+            args: listenArgs,
+            cwd: path.dirname(scriptPath),
           }]
         };
         const configPath = path.join(DATA_DIR, 'ecosystem.config.json');
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
         console.log('已生成: ' + configPath);
+        console.log('  模式: ' + (autoExec ? 'auto-exec (spawn claude)' : 'task-file (写入队列)'));
+        if (autoExec) console.log('  claude 工作目录: ' + projectDir);
         console.log('');
         console.log('启动命令:');
         console.log('  pm2 start ' + configPath);

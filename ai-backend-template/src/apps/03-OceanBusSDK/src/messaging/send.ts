@@ -1,5 +1,5 @@
 import { HttpClient } from '../client/http-client';
-import type { SendPayload } from '../types/messaging';
+import type { SendPayload, SendOptions } from '../types/messaging';
 import { ErrorCode } from '../types/api';
 import { OceanBusError, ApiError } from '../client/errors';
 import { generateClientMsgId } from './idgen';
@@ -17,7 +17,7 @@ export class MessagingService {
     this.getOpenId = getOpenId;
   }
 
-  async send(toOpenid: string, content: string, clientMsgId?: string): Promise<void> {
+  async send(toOpenid: string, content: string, opts?: SendOptions): Promise<void> {
     if (!toOpenid || toOpenid.trim().length === 0) {
       throw new OceanBusError('toOpenid must not be empty');
     }
@@ -31,9 +31,9 @@ export class MessagingService {
     }
 
     const payload: SendPayload = {
-      from_openid: this.getOpenId() || '',
+      from_openid: opts?.fromOpenid || this.getOpenId() || '',
       to_openid: toOpenid,
-      client_msg_id: clientMsgId || generateClientMsgId(),
+      client_msg_id: opts?.clientMsgId || generateClientMsgId(),
       content,
     };
 
@@ -55,8 +55,8 @@ export class MessagingService {
     }
   }
 
-  async sendJson(toOpenid: string, data: object, clientMsgId?: string): Promise<void> {
+  async sendJson(toOpenid: string, data: object, opts?: SendOptions): Promise<void> {
     const content = JSON.stringify(data);
-    return this.send(toOpenid, content, clientMsgId);
+    return this.send(toOpenid, content, opts);
   }
 }

@@ -3,6 +3,7 @@ import { hideBin } from 'yargs/helpers';
 import { registerCommand } from './commands/register';
 import { whoamiCommand } from './commands/whoami';
 import { openidCommand } from './commands/openid';
+import { newOpenIdCommand } from './commands/new-openid';
 import { sendCommand } from './commands/send';
 import { listenCommand } from './commands/listen';
 import { blockCommand } from './commands/block';
@@ -20,6 +21,7 @@ export function runCli(argv: string[] = process.argv): void {
     .command(registerCommand)
     .command(whoamiCommand)
     .command(openidCommand)
+    .command(newOpenIdCommand)
     .command(sendCommand)
     .command(listenCommand)
     .command(blockCommand)

@@ -89,7 +89,7 @@ graph LR
 ```bash
 npm install oceanbus
 oceanbus register
-oceanbus whoami
+oceanbus openid
 ```
 
 ### 2. 两个 Agent 对话（5 分钟）
@@ -141,7 +141,8 @@ clawhub install guess-ai
 npm install -g oceanbus
 
 oceanbus register              # 注册新 Agent
-oceanbus whoami                # 查看身份
+oceanbus openid                # 查看稳定身份
+oceanbus new-openid            # 生成新 OpenID
 oceanbus send <openid>         # 发消息 (支持管道)
 oceanbus listen                # 收消息
 oceanbus block <openid>        # 屏蔽发送者

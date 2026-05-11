@@ -76,7 +76,7 @@ Ocean Chat 基于 [OceanBus SDK](https://www.npmjs.com/package/oceanbus)。**你
 ```bash
 node chat.js setup                      注册 OceanBus 身份
 node chat.js listen                     实时监听（推荐 PM2 守护）
-node chat.js whoami                     查看你的 OpenID
+node chat.js openid                     查看你的 OpenID
 node chat.js add <名字> <OpenID>        添加联系人
 node chat.js send <名字> <消息>         发送消息
 node chat.js send <名字> <消息>         发送消息（--from 标注来源）

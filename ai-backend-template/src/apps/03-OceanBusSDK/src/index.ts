@@ -171,7 +171,7 @@ export class OceanBus {
     const ob = new OceanBus(config, keyStore);
 
     // Always load persisted identity from keyStore.
-    // The saved OpenID must be reused — calling whoami() generates a new
+    // The saved OpenID must be reused — calling newOpenId() generates a new
     // anti-tracking nonce each time, which breaks service-side reachability.
     const saved = await keyStore.load();
     if (saved) {
@@ -214,8 +214,8 @@ export class OceanBus {
       }
     }
     const transport = {
-      send: (to: string, content: string, cid?: string) => ob.messaging.send(to, content, cid),
-      sendJson: (to: string, data: object, cid?: string) => ob.messaging.sendJson(to, data, cid),
+      send: (to: string, content: string, cid?: string) => ob.messaging.send(to, content, cid ? { clientMsgId: cid } : undefined),
+      sendJson: (to: string, data: object, cid?: string) => ob.messaging.sendJson(to, data, cid ? { clientMsgId: cid } : undefined),
     };
 
     ob.l1 = {
@@ -289,15 +289,16 @@ export class OceanBus {
   async register(): Promise<RegistrationData> {
     const data = await this.identity.register();
     // Fetch and persist OpenID immediately
-    try { await this.identity.whoami(); } catch {}
+    try { await this.identity.newOpenId(); } catch {}
     await this.keyStore.save(this.identity.exportState());
     // Bootstrap default contacts (YP + Reputation)
     await this.bootstrapRoster().catch(() => {});
     return data;
   }
 
-  async whoami(): Promise<{ agent_id: string; openid: string }> {
-    const data = await this.identity.whoami();
+  /** Generate a new OpenID nonce. Each call returns a different value. For stable address, use getOpenId(). */
+  async newOpenId(): Promise<{ agent_id: string; openid: string }> {
+    const data = await this.identity.newOpenId();
     // Persist newly fetched OpenID
     if (data.my_openid) await this.keyStore.save(this.identity.exportState());
     return { agent_id: this.identity.getAgentId()!, openid: data.my_openid };
@@ -305,6 +306,12 @@ export class OceanBus {
 
   async getOpenId(): Promise<string> {
     return this.identity.getOpenId();
+  }
+
+  /** @deprecated Use getOpenId() for stable identity, or newOpenId() to generate a new nonce. */
+  async whoami(): Promise<{ agent_id: string; openid: string }> {
+    const openid = await this.getOpenId();
+    return { agent_id: this.identity.getAgentId()!, openid };
   }
 
   /** One-liner: generate an Ed25519 keypair and return everything needed for Yellow Pages registration. */
@@ -452,11 +459,11 @@ export class OceanBus {
 
   // Messaging convenience methods
   async send(toOpenid: string, content: string, opts?: SendOptions): Promise<void> {
-    return this.messaging.send(toOpenid, content, opts?.clientMsgId);
+    return this.messaging.send(toOpenid, content, opts);
   }
 
   async sendJson(toOpenid: string, data: object, opts?: SendOptions): Promise<void> {
-    return this.messaging.sendJson(toOpenid, data, opts?.clientMsgId);
+    return this.messaging.sendJson(toOpenid, data, opts);
   }
 
   // Mailbox convenience methods

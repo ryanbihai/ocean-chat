@@ -94,7 +94,7 @@ async function cmdSetup() {
   await ob.destroy();
 }
 
-async function cmdWhoami() {
+async function cmdOpenId() {
   const creds = loadCreds();
   if (!creds) { console.log('Not registered. Run: node game.js setup'); return; }
   console.log(creds.openid);
@@ -470,7 +470,7 @@ Guess Who's AI? — OceanBus Lighthouse Skill
 
 Commands (any mode):
   node game.js setup                    Register on OceanBus
-  node game.js whoami                   Show your OpenID
+  node game.js openid                   Show your OpenID
 
 Host mode:
   node game.js host <roomCode>          Create a game room
@@ -500,7 +500,8 @@ AI mode (requires ANTHROPIC_API_KEY):
   try {
     switch (cmd) {
       case 'setup':      await cmdSetup(); break;
-      case 'whoami':     await cmdWhoami(); break;
+      case 'openid':     await cmdOpenId(); break;
+      case 'whoami':     console.error('⚠  "whoami" is deprecated — use "openid" instead.'); await cmdOpenId(); break;
 
       case 'host':       await cmdHost(args[1]); break;
       case 'deregister': await cmdDeregister(); break;

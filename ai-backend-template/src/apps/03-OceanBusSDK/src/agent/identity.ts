@@ -15,8 +15,8 @@ export class AgentIdentityManager {
   private openidCache: string | null = null;
 
   // The OpenID that was saved from a previous session and reloaded on startup.
-  // For service-side agents this MUST be used instead of calling whoami(),
-  // because whoami() generates a NEW OpenID each call (anti-tracking nonce).
+  // For service-side agents this MUST be used instead of calling newOpenId(),
+  // because newOpenId() generates a NEW OpenID each call (anti-tracking nonce).
   // Service agents need a stable address so others can reach them.
   private persistedOpenId: string | null = null;
 
@@ -38,7 +38,7 @@ export class AgentIdentityManager {
     return this.openidCache;
   }
 
-  // Set the OpenID loaded from persistent storage — this prevents whoami()
+  // Set the OpenID loaded from persistent storage — this prevents newOpenId()
   // from being called unnecessarily, which would generate a new anti-tracking
   // nonce and break service-side reachability.
   setPersistedOpenId(openid: string): void {
@@ -83,24 +83,36 @@ export class AgentIdentityManager {
     return data;
   }
 
-  async whoami(): Promise<OpenIDData> {
+  // Generate a NEW OpenID nonce by calling L0 API.
+  // Each call returns a different value — this is anti-tracking by design.
+  // For stable receiving address, use getOpenId() instead.
+  async newOpenId(): Promise<OpenIDData> {
     this.ensureAuth();
     const res = await this.http.get<OpenIDData>('/agents/me', { apiKey: this.apiKey! });
     this.openidCache = res.data.my_openid;
-    this.persistedOpenId = res.data.my_openid;
+    // Only auto-persist on first call; explicit setPersistedOpenId takes precedence
+    if (this.persistedOpenId === null) {
+      this.persistedOpenId = res.data.my_openid;
+    }
     return res.data;
   }
 
   // Returns the OpenID that should be used for receiving messages.
-  // Priority: persisted (from keyStore) > cached > fresh whoami() call.
+  // Priority: persisted (from keyStore) > cached > fresh newOpenId() call.
   // IMPORTANT: Service-side agents MUST use the persisted OpenID. Calling
-  // whoami() generates a new anti-tracking nonce each time — useful for
+  // newOpenId() generates a new anti-tracking nonce each time — useful for
   // consumer privacy but breaks service reachability if called repeatedly.
   async getOpenId(): Promise<string> {
     if (this.persistedOpenId !== null) return this.persistedOpenId;
     if (this.openidCache !== null) return this.openidCache;
-    const data = await this.whoami();
+    const data = await this.newOpenId();
     return data.my_openid;
+  }
+
+  /** @deprecated Use getOpenId() for stable identity, or newOpenId() to generate a new nonce. */
+  async whoami(): Promise<OpenIDData> {
+    const my_openid = await this.getOpenId();
+    return { my_openid, created_at: '' };
   }
 
   async ensureRegistered(): Promise<AgentState> {

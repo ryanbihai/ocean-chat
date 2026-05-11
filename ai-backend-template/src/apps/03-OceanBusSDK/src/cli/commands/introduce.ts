@@ -18,7 +18,7 @@ export const introduceCommand: CommandModule = {
         process.exit(1);
       }
 
-      const myOpenId = ob.identity.getCachedOpenId() || (await ob.identity.whoami()).my_openid;
+      const myOpenId = await ob.getOpenId();
       const myName = argv.as;
       const theirName = argv.name || `Contact-${argv.openid.slice(0, 8)}`;
 

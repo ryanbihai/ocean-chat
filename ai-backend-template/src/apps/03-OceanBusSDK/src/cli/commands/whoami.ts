@@ -3,13 +3,16 @@ import { createOceanBus } from '../../index';
 
 export const whoamiCommand: CommandModule = {
   command: 'whoami',
-  describe: 'Show current agent identity (must register first)',
+  describe: '[deprecated] Use "openid" instead — show current agent identity',
   handler: async () => {
+    console.error('⚠  "oceanbus whoami" is deprecated — use "oceanbus openid" instead.');
+    console.error('   openid      = show your stable receiving OpenID');
+    console.error('   new-openid  = generate a new OpenID nonce (changes your address)');
+    console.error('');
     try {
       const ob = await createOceanBus();
       if (!ob.identity.getApiKey()) {
-        console.error('No identity found. Run "oceanbus register" first to create a persistent agent identity.');
-        console.error('Once registered, whoami will always show the same OpenID — your permanent global address.');
+        console.error('No identity found. Run "oceanbus register" first.');
         process.exit(1);
       }
       const data = await ob.whoami();
