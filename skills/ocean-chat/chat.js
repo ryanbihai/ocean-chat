@@ -34,7 +34,20 @@ function getArg(name) {
   const idx = process.argv.indexOf(name);
   return (idx >= 0 && idx + 1 < process.argv.length) ? process.argv[idx + 1] : null;
 }
-const DATA_DIR = getArg('--data-dir') || path.join(os.homedir(), '.oceanbus-chat');
+let DATA_DIR = getArg('--data-dir') || path.join(os.homedir(), '.oceanbus-chat');
+// Safety: resolve relative paths immediately so identity survives ocean-chat upgrades.
+// A relative --data-dir puts .oceanbus-cc inside the ocean-chat directory, which is
+// deleted on reinstall. Absolute paths (e.g. C:/IT/oceanbus/.oceanbus-cc) live outside.
+if (!path.isAbsolute(DATA_DIR)) {
+  const abs = path.resolve(DATA_DIR);
+  if (process.env.OCEANBUS_SUPPRESS_PATH_WARN !== '1') {
+    console.warn('[ocean-chat] ⚠ --data-dir "%s" is relative.', DATA_DIR);
+    console.warn('[ocean-chat]   Resolved to: %s', abs);
+    console.warn('[ocean-chat]   Use an absolute path to avoid identity loss on upgrade.');
+    console.warn('[ocean-chat]   Example: --data-dir %s', abs);
+  }
+  DATA_DIR = abs;
+}
 const CRED_FILE = path.join(DATA_DIR, 'credentials.json');
 const CURSOR_FILE = path.join(DATA_DIR, 'cursor.json');
 const DATE_LOG_FILE = path.join(DATA_DIR, 'date-log.json');
@@ -1129,6 +1142,102 @@ async function cmdThreadReopen(threadId) {
   console.log('🔄 已重开线程: ' + t.subject);
 }
 
+// ── connect-cc ─────────────────────────────────────────────────────────────
+
+/** Walk up from `start` until we find a .git directory (or hit filesystem root). */
+function findProjectRoot(start) {
+  let dir = path.resolve(start || process.cwd());
+  while (true) {
+    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null; // hit root
+    dir = parent;
+  }
+}
+
+async function cmdConnectCC() {
+  // 0. Detect ocean-chat location and project root
+  const oceanChatDir = path.dirname(path.resolve(__filename));
+  const projectRoot = findProjectRoot(process.cwd());
+
+  if (!projectRoot) {
+    console.error('[connect-cc] 找不到项目根目录（未找到 .git）。请在 git 仓库中运行。');
+    process.exit(1);
+  }
+
+  // CC name from project root directory name
+  const ccName = 'CC-' + path.basename(projectRoot);
+
+  // data-dir: always use project root (safe from ocean-chat reinstall).
+  // Only respect explicit --data-dir if the user intentionally overrides.
+  const explicitDataDir = getArg('--data-dir');
+  const dataDir = explicitDataDir
+    ? path.resolve(explicitDataDir)
+    : path.join(projectRoot, '.oceanbus-cc');
+
+  // 1. Register or load identity
+  let creds = null;
+  const credFile = path.join(dataDir, 'credentials.json');
+  if (fs.existsSync(credFile)) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(credFile, 'utf-8'));
+      if (raw.agent_id && raw.api_key && raw.openid) creds = raw;
+    } catch (_) { /* corrupt — will re-register below */ }
+  }
+
+  if (!creds) {
+    console.warn('[connect-cc] 未注册，正在创建 OceanBus 身份...');
+    fs.mkdirSync(dataDir, { recursive: true });
+    const ob = await createOceanBus({ keyStore: { type: 'memory' } });
+    try {
+      const reg = await ob.register();
+      const openid = await ob.getOpenId();
+      creds = { agent_id: reg.agent_id, api_key: reg.api_key, openid, source: SKILL_SOURCE, created_at: new Date().toISOString() };
+      fs.writeFileSync(credFile, JSON.stringify(creds, null, 2));
+    } catch (e) {
+      console.error('注册失败: ' + e.message);
+      await ob.destroy();
+      process.exit(1);
+    }
+    await ob.destroy();
+  }
+
+  const openid = creds.openid;
+  const openid5 = openid.slice(0, 5);
+
+  // 2. Build the cron check command (absolute paths, forward slashes)
+  const chatAbs = path.resolve(__filename).replace(/\\/g, '/');
+  const dataAbs = dataDir.replace(/\\/g, '/');
+  const oceanChatAbs = oceanChatDir.replace(/\\/g, '/');
+  const cronCmd = `cd ${oceanChatAbs} && node chat.js --data-dir ${dataAbs} check`;
+
+  // 3. Build the pairing message (OpenID pre-filled)
+  const pairingMsg = [
+    '帮我升级 ocean-chat skill 到最新版（保留数据，不要重装）',
+    '',
+    '然后，我们来双向核对 OpenID：',
+    '- 我要添加的联系人是 ' + ccName + '，他的 OpenID 是 ' + openid + '，他的前5位是 ' + openid5,
+    '- 请你把 ' + ccName + ' 的前5位读出来让我确认',
+    '- 同时也把你的 OpenID 前5位发给我，我来核对',
+    '',
+    '核对一致后，再设置定时任务：每1分钟帮我自动检查OceanBus新消息，有消息立刻推送给我',
+    '最后，给' + ccName + '发个消息：帮我阅读一下项目文件夹，给我个100字的简介',
+  ].join('\n');
+
+  // 4. Output structured result
+  console.log('CC_NAME=' + ccName);
+  console.log('OPENID=' + openid);
+  console.log('OPENID5=' + openid5);
+  console.log('DATA_DIR=' + dataDir.replace(/\\/g, '/'));
+  console.log('OCEAN_CHAT_DIR=' + oceanChatAbs);
+  console.log('PROJECT_ROOT=' + (projectRoot || '').replace(/\\/g, '/'));
+  console.log('CRON_CMD=' + cronCmd);
+  console.log('');
+  console.log('─── 以下发给小龙虾 ───');
+  console.log(pairingMsg);
+  console.log('─── 以上发给小龙虾 ───');
+}
+
 // ── Task Queue ──────────────────────────────────────────────────────────────
 
 function cmdTasks(action) {
@@ -1192,6 +1301,7 @@ async function main() {
     console.log('OceanBus Chat — Agent 会面协商');
     console.log('');
     console.log('命令:');
+    console.log('  node chat.js connect-cc                 一键配通：注册身份、生成配对消息');
     console.log('  node chat.js setup                      注册 + 获取你的 OpenID');
     console.log('  node chat.js openid                     查看你的 OpenID');
     console.log('  node chat.js add <名字> <OpenID>        添加联系人（存入 Roster）');
@@ -1286,6 +1396,9 @@ async function main() {
       }
       case 'check':
         await cmdCheck();
+        break;
+      case 'connect-cc':
+        await cmdConnectCC();
         break;
       case 'listen': {
         // Parse --on-message, --auto-exec, --project-dir flags
