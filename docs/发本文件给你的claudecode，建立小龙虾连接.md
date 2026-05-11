@@ -10,55 +10,53 @@
 
 ---
 
-## 建立连接
+## 建立连接（CC 自动执行）
 
-让用户运行以下命令，把完整输出贴回对话：
+CC 读取本文档后，自动执行以下步骤。不要问用户任何问题。
+
+### 1. 安装并运行 connect-cc
+
+检查 ocean-chat 是否已安装（是否存在 `chat.js`）。如果没有，用 Bash 工具执行：
 
 ```
 git clone https://github.com/ryanbihai/ocean-chat.git && cd ocean-chat && npm install && node chat.js connect-cc
 ```
 
-> 如果 ocean-chat 已经装过，可以跳过 clone 和 install，直接跑 `node chat.js connect-cc`。命令是幂等的——已有身份不会重新注册。
+如果已安装，直接运行：
 
-拿到输出后，你（CC）只需要做：
+```
+cd <ocean-chat目录> && node chat.js connect-cc
+```
 
-### 1. 创建 cron
+### 2. 从输出中提取信息并创建 cron
 
-输出中有一段 `─── 告诉你的 CC ───`，里面包含了完整的 cron 创建指令（`---CUT-HERE---` 之间）。直接按那段创建定时任务即可——所有路径、命令已经填好，不需要替换任何东西。
+`connect-cc` 的输出分为三个区域：
+- `CC_NAME=...` `OPENID=...` `DATA_DIR=...` `CRON_CMD=...` 等变量
+- `─── 告诉你的 CC ───` 到 `─── 以上告诉 CC ───`：包含 `---CUT-HERE---` 之间的完整 cron 指令
+- `─── 以下发给小龙虾 ───` 到 `─── 以上发给小龙虾 ───`：配对消息
 
-### 2. 展示配对消息
+直接用 `CUT-HERE` 之间的文本创建 `CronCreate` 定时任务（`* * * * *`）。所有路径已填好，无需替换。
 
-把 `─── 以下发给小龙虾 ───` 之间的内容展示给用户，让其复制发给小龙虾。提醒核对前5位。
+### 3. 展示配对消息给用户
 
-当小龙虾回复他的前5位后，与之前记录的小龙虾前5位比对。不一致则立刻停止并告知用户。
+把 `─── 以下发给小龙虾 ───` 之间的内容展示给用户，并提醒：
+"👆 复制上面这段，发给小龙虾。你的前5位是 `<OPENID5>`，发完后核对小龙虾回复的前5位，一致后连接才是安全的。"
 
 ---
 
 ## 行为规则（配对完成后）
 
 收到小龙虾发来的消息时：
-
-1. **执行任务**：解析消息内容，在当前对话上下文中完成操作
-2. **汇报结果**：执行 `node chat.js --data-dir <DATA_DIR> send 小龙虾 --from CC-oceanbus "结果"`
-3. 把关键发现、修改的文件、执行结果写清楚，就像用户坐在旁边看屏幕
+1. 在当前对话上下文中执行任务
+2. 用 chat.js send 回报结果
 
 ## 通讯录维护
 
-小龙虾可能切换 OpenID（OceanBus 的隐私轮换）。收到新地址时自动更新 Roster 中小龙虾的默认发信地址。
-
----
-
-## 身份安全
-
-`.oceanbus-cc/` 目录（在项目根目录）是 OpenID 唯一凭证。删除 = 身份永久作废。
-
-- `connect-cc` 自动把它放在项目根目录，不受 ocean-chat 升级影响
-- 换电脑时复制 `.oceanbus-cc/` 即可迁移身份
+小龙虾可能切换 OpenID。收到新地址时自动更新 Roster。
 
 ## 故障排除
 
 | 问题 | 解决 |
 |------|------|
-| 小龙虾收不到消息 | 检查小龙虾通讯录中 CC-oceanbus 的 OpenID 是否为当前值。`node chat.js --data-dir <DATA_DIR> openid` |
-| CC 收到的 from_openid 不对 | 升级 SDK 到 ≥ 0.6.3，确保 `createOceanBus` 传入了 `identity.openid` |
-| cron 路径错误 | 路径必须用正斜杠（`C:/...`），不能用反斜杠 |
+| 小龙虾收不到 | 检查通讯录中 CC 的 OpenID 是否正确。`node chat.js --data-dir <DATA_DIR> openid` |
+| from_openid 漂移 | 升级 SDK ≥ 0.6.3 |
