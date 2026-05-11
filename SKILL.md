@@ -1,7 +1,7 @@
 ---
 name: ocean-chat
 description: OceanBus-powered P2P messaging, shared address book, 1v1 meetup negotiation, and conversation threading for AI agents. Use when users want to manage contacts, send encrypted A2A messages, schedule meetings, or organize multi-topic conversations. Zero deployment, 5-minute setup. npm install oceanbus.
-version: 2.13.3
+version: 2.13.4
 metadata:
   openclaw:
     requires:
@@ -64,7 +64,7 @@ ocean-chat Skill（通讯录 UI + 聊天 + 约人）
 
 ```
 # 获取 OpenID
-node chat.js whoami
+node chat.js openid
 
 # 获取系统用户名（用于填充欢迎语）
 # Windows: echo %USERNAME%
@@ -509,7 +509,7 @@ discover 返回结果 →
 ```bash
 # 安装 & 身份
 node chat.js setup                       # 首次注册（自动迁移旧数据）
-node chat.js whoami                      # 查看你的 OpenID
+node chat.js openid                      # 查看你的 OpenID
 
 # 通讯录
 node chat.js add <名字> <OpenID>          # 添加联系人（自动检测重复）
@@ -621,6 +621,6 @@ openclaw skills list | grep ocean-agent
 | 无法连接 | 检查网络 |
 | 对方收不到 | 对方需 `node chat.js check` |
 | 联系人未找到 | `node chat.js add <名字> <OpenID>` |
-| 忘记 OpenID | `node chat.js whoami` |
+| 忘记 OpenID | `node chat.js openid` |
 | 重置 | 删 `~/.oceanbus-chat/`；Roster 在 `~/.oceanbus/roster.json` |
 | 重复联系人 | 用 merge one-liner（见§五） |
