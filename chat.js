@@ -443,7 +443,7 @@ async function cmdSend(target, message, fromName) {
   await ob.destroy();
 }
 
-async function cmdCheck() {
+async function cmdCheck(silent = false) {
   const creds = loadCredentials();
   if (!creds) {
     console.log('尚未注册。运行: node chat.js setup');
@@ -463,7 +463,7 @@ async function cmdCheck() {
   const messages = await ob.sync(lastSeq > 0 ? lastSeq : undefined);
 
   if (messages.length === 0) {
-    console.log('没有新消息。');
+    if (!silent) console.log('没有新消息。');
   } else {
     let maxSeq = lastSeq;
 
@@ -1209,7 +1209,7 @@ async function cmdConnectCC() {
   const chatAbs = path.resolve(__filename).replace(/\\/g, '/');
   const dataAbs = dataDir.replace(/\\/g, '/');
   const oceanChatAbs = oceanChatDir.replace(/\\/g, '/');
-  const cronCmd = `cd ${oceanChatAbs} && node chat.js --data-dir ${dataAbs} check`;
+  const cronCmd = `cd ${oceanChatAbs} && node chat.js --data-dir ${dataAbs} check --silent-if-empty`;
 
   // 3. Build the pairing message (OpenID pre-filled)
   const pairingMsg = [
@@ -1249,8 +1249,9 @@ async function cmdConnectCC() {
   console.log('');
   console.log('执行：' + cronCmd);
   console.log('');
-  console.log('有消息时：展示内容、执行任务、用 node chat.js --data-dir ' + dataAbs + ' send 小龙虾 --from ' + ccName + ' "结果"');
-  console.log('没有消息时：仅输出"。"，不要做任何工具调用。');
+  console.log('注意：check --silent-if-empty 在没有消息时不输出任何内容。');
+  console.log('如果命令有输出 → 有新消息，展示内容、执行任务、用 node chat.js --data-dir ' + dataAbs + ' send 小龙虾 --from ' + ccName + ' "结果"');
+  console.log('如果命令无输出 → 没有新消息，保持静默，不要做任何工具调用。');
   console.log('---CUT-HERE---');
   console.log('─── 以上告诉 CC ───');
 
@@ -1417,7 +1418,7 @@ async function main() {
         break;
       }
       case 'check':
-        await cmdCheck();
+        await cmdCheck(args.includes('--silent-if-empty'));
         break;
       case 'connect-cc':
         await cmdConnectCC();
