@@ -90,24 +90,35 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
    → git status — 确认 skills/<slug>/ 下的改动已 commit
    → 如有未提交改动，先提交: git add skills/<slug>/ && git commit -m "release: <slug> v<version>"
 
-3. 推送到 GitHub（第一步，必须先做）
-   → git subtree push --prefix=skills/<slug> skill-<slug> main
+3. 确认目标仓库的默认分支（不是所有仓库都用 main！）
+   → 运行: git ls-remote --refs https://github.com/ryanbihai/<slug>.git | grep -E 'main|master'
+   → 当前分支表:
+     ocean-chat → main
+     find-agent → master
+     guess-ai → master
+     captain-lobster → master
+     ocean-agent → main
+     ocean-desk → main
+   → 下面命令中的 <branch> 请替换为实际默认分支名
+
+4. 推送到 GitHub（第一步，必须先做）
+   → git subtree push --prefix=skills/<slug> skill-<slug> <branch>
    → 如失败: git subtree split --prefix=skills/<slug> -b split-<slug>
-            git push skill-<slug> split-<slug>:main --force
+            git push skill-<slug> split-<slug>:<branch> --force
             git branch -D split-<slug>
 
-4. 打版本 tag
+5. 打版本 tag
    → git clone https://github.com/ryanbihai/<slug>.git /tmp/<slug>
    → cd /tmp/<slug> && git tag v<version> -m "<slug> v<version>"
    → git push origin v<version>
    → rm -rf /tmp/<slug>
 
-5. 发布到 ClawHub（第二步，GitHub 成功后才能做）
+6. 发布到 ClawHub（第二步，GitHub 成功后才能做）
    → git clone https://github.com/ryanbihai/<slug>.git /tmp/<slug>
    → clawhub publish /tmp/<slug> --slug <slug> --name "<DisplayName>" --version <version> --changelog "<变更说明>"
    → rm -rf /tmp/<slug>
 
-6. 验证
+7. 验证
    → clawhub inspect <slug>
    → 确认线上版本号 == 刚发布的版本号
 ```

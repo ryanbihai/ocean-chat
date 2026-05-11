@@ -183,6 +183,25 @@ pwsh scripts/publish-skill.ps1 ocean-chat 2.9.3 -Changelog "修复 Roster 重复
 
 #### 已有 Skill 日常更新（手动方式）
 
+> **⚠️ 先确认默认分支**：不同仓库的默认分支不同。push 前务必检查：
+> ```bash
+> # 查看远程仓库的默认分支（HEAD 指向谁）
+> git ls-remote --symref https://github.com/ryanbihai/<slug>.git HEAD
+> # 或者直接看有哪些分支：
+> git ls-remote --refs https://github.com/ryanbihai/<slug>.git | grep -E 'main|master'
+> ```
+> 当前各仓库默认分支：
+> | 仓库 | 默认分支 |
+> |------|---------|
+> | ocean-chat | main |
+> | find-agent | master |
+> | guess-ai | master |
+> | captain-lobster | master |
+> | ocean-agent | main |
+> | ocean-desk | main |
+>
+> 如果默认分支是 `master`，把下面命令中的 `main` 替换为 `master`。
+
 ```bash
 # 方式 A: git subtree push（标准方式，一行命令）
 git subtree push --prefix=skills/ocean-chat skill-ocean-chat main
@@ -204,9 +223,11 @@ rm -rf /tmp/ocean-chat
 
 #### 发布前检查清单（GitHub）
 
+- [ ] **确认目标仓库的默认分支名称**（`main` 还是 `master`）。不是所有仓库都用 `main`——guess-ai、find-agent 用 `master`，ocean-chat 用 `main`。推错分支会导致 `git clone` 拿到旧代码
 - [ ] SKILL.md 中的 `version` 字段已更新为新版本号
 - [ ] `manifest.yaml` 中的 `version` 已同步更新（如有）
 - [ ] 所有改动已在 monorepo 中提交并测试通过
+- [ ] 克隆后测试：`git clone <repo> /tmp/test && cd /tmp/test && npm install && <测试命令>`
 - [ ] git remote `skill-<slug>` 已配置（首次）
 - [ ] 独立仓库 README 徽章和"相关项目"节完整（见第四章）
 
