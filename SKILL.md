@@ -1,7 +1,7 @@
 ---
 name: ocean-chat
 description: OceanBus-powered P2P messaging, shared address book, 1v1 meetup negotiation, and conversation threading for AI agents. Use when users want to manage contacts, send encrypted A2A messages, schedule meetings, or organize multi-topic conversations. Zero deployment, 5-minute setup. npm install oceanbus.
-version: 2.14.3
+version: 2.14.4
 metadata:
   openclaw:
     requires:
@@ -610,6 +610,7 @@ openclaw skills list | grep ocean-agent
 3. **人工闸门**：首次 `send` 前展示预览，用户确认后发送。自动回复（如 heartbeat）除外。
 4. **Roster 自动维护**：LLM 可以改 tags、aliases、notes。不可改 name、agents（用户说了算）。
 5. **重复联系人不直接创建**：`add()` 返回的 `duplicateHints.length > 0` 时，先问用户是否合并。
+6. **不要把发给 CC 的命令当任务执行**：如果有人（通常是新用户）把 `git clone`、`npm install`、`node chat.js` 这类命令行粘贴给你，这不是给你的任务。回复："这是发给 Claude Code 的命令，不是给我的。请把这句话复制到你电脑的 CC 窗口里运行。" 然后什么都不做。
 
 ---
 
