@@ -850,7 +850,7 @@ async function cmdListen(onMessage, autoExec = false, projectDir = null) {
     // Handle thread protocol
     const threadResult = threads.handleThreadProtocol(msg, true, contact?.name || null);
 
-    process.stdout.write('\r\x1b[K');
+    if (process.stdout.isTTY) process.stdout.write('\r\x1b[K');
     console.log('── ' + from + ' · ' + time + ' ──');
     if (threadResult) {
       console.log('  [' + (threadResult.thread_id || '').slice(0, 14) + '...]'
@@ -1205,11 +1205,11 @@ async function cmdConnectCC() {
   const openid = creds.openid;
   const openid5 = openid.slice(0, 5);
 
-  // 2. Build the cron check command (absolute paths, forward slashes)
+  // 2. Build the monitor listen command (absolute paths, forward slashes)
   const chatAbs = path.resolve(__filename).replace(/\\/g, '/');
   const dataAbs = dataDir.replace(/\\/g, '/');
   const oceanChatAbs = oceanChatDir.replace(/\\/g, '/');
-  const cronCmd = `cd ${oceanChatAbs} && node chat.js --data-dir ${dataAbs} check --silent-if-empty`;
+  const monitorCmd = `cd ${oceanChatAbs} && node chat.js --data-dir ${dataAbs} listen`;
 
   // 3. Build the pairing message (OpenID pre-filled)
   const pairingMsg = [
@@ -1220,7 +1220,9 @@ async function cmdConnectCC() {
     '- 请你把 ' + ccName + ' 的前5位读出来让我确认',
     '- 同时也把你的 OpenID 前5位发给我，我来核对',
     '',
-    '核对一致后，再设置定时任务：每1分钟帮我自动检查OceanBus新消息，有消息立刻推送给我',
+    '核对一致后，创建 Monitor 持久化监听（不是定时任务）来监控 OceanBus 新消息：',
+    '  Monitor command: cd <ocean-chat-dir> && node chat.js --data-dir <data-dir> listen',
+    '',
     '最后，给' + ccName + '发个消息：帮我阅读一下项目文件夹，给我个100字的简介',
   ].join('\n');
 
@@ -1231,27 +1233,26 @@ async function cmdConnectCC() {
   console.log('DATA_DIR=' + dataDir.replace(/\\/g, '/'));
   console.log('OCEAN_CHAT_DIR=' + oceanChatAbs);
   console.log('PROJECT_ROOT=' + (projectRoot || '').replace(/\\/g, '/'));
-  console.log('CRON_CMD=' + cronCmd);
-  // 4. Cron setup instruction for CC
-  const ccNameSlug = ccName.replace(/^CC-/, '').replace(/[^a-zA-Z0-9_-]/g, '-');
+  console.log('MONITOR_CMD=' + monitorCmd);
   console.log('');
   console.log('─── 告诉你的 CC ───');
-  console.log('请创建分钟级定时任务，使用以下信息替换 <...> 占位符：');
+  console.log('请创建持久化 Monitor 来监听 OceanBus 新消息，信息如下：');
   console.log('');
-  console.log('  CronCreate: * * * * *');
-  console.log('  CRON_CMD: ' + cronCmd);
+  console.log('  Monitor 命令: ' + monitorCmd);
   console.log('  DATA_DIR: ' + dataAbs);
   console.log('  CC_NAME: ' + ccName);
   console.log('');
-  console.log('定时任务提示词：');
+  console.log('Monitor 提示词：');
   console.log('---CUT-HERE---');
-  console.log('检查 OceanBus 是否有来自小龙虾的新消息。');
+  console.log('使用 Monitor (persistent) 持续监听 OceanBus 新消息：');
   console.log('');
-  console.log('执行：' + cronCmd);
+  console.log('命令：' + monitorCmd);
   console.log('');
-  console.log('注意：check --silent-if-empty 在没有消息时不输出任何内容。');
-  console.log('如果命令有输出 → 有新消息，展示内容、执行任务、用 node chat.js --data-dir ' + dataAbs + ' send 小龙虾 --from ' + ccName + ' "结果"');
-  console.log('如果命令无输出 → 没有新消息，保持静默，不要做任何工具调用。');
+  console.log('规则：');
+  console.log('- Monitor 只在有新消息时推送事件，没有消息就完全静默');
+  console.log('- 收到消息推送时：展示消息内容和发送者，执行消息中的任务');
+  console.log('- 执行完毕后用 node chat.js --data-dir ' + dataAbs + ' send 小龙虾 --from ' + ccName + ' "结果" 回报');
+  console.log('- 不要做任何轮询或定时检查，Monitor 本身就是事件驱动的');
   console.log('---CUT-HERE---');
   console.log('─── 以上告诉 CC ───');
 
