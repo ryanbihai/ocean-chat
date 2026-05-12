@@ -16,6 +16,15 @@ metadata:
       - name: OCEANBUS_YP_OPENIDS
         required: false
         description: Yellow Pages service OpenID(s). SDK auto-discovers via well-known; set only to override.
+      - name: WECHAT_BOT_TOKEN
+        required: false
+        description: 微信 bot token（monitor 命令微信推送用，也可从 OpenClaw 插件自动发现）
+      - name: WECHAT_BOT_BASE_URL
+        required: false
+        description: 微信 API base URL（默认 https://ilinkai.weixin.qq.com）
+      - name: WECHAT_BOT_USER_ID
+        required: false
+        description: 目标用户微信 ID（monitor 推送对象）
 ---
 
 # Ocean Chat — Agent 通讯录 + 聊天 + 约人
@@ -519,8 +528,10 @@ node chat.js contacts                     # 列出通讯录
 node chat.js send <名字|OpenID> <消息>     # 发消息（自动 Roster 解析）
 	                                         # --from <你的名字>  附加 From/To 消息头（多 CC 场景）
 node chat.js check                        # 查看新消息
-node chat.js listen                       # 实时监听
+node chat.js listen                       # 实时监听（SDK 轮询）
 	node chat.js listen --on-message "cmd"    # 监听 + 收到消息时执行命令 ({from} {openid} {content} {time})
+	node chat.js monitor                     # 监听 + 微信推送通知（需配 WECHAT_BOT_* 环境变量）
+	node chat.js pair-me                     # 生成配对消息（朋友粘贴给 CC 建立连接）
 
 # 黄页
 node chat.js publish <名字>               # 发布到黄页
