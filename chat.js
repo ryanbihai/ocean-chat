@@ -1380,10 +1380,6 @@ async function main() {
       case 'openid':
         await cmdOpenId();
         break;
-      case 'whoami':
-        console.error('⚠  "whoami" is deprecated — use "openid" instead.');
-        await cmdOpenId();
-        break;
       case 'add':
         await cmdAdd(args[1], args[2]);
         break;
