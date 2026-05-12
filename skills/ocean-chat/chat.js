@@ -458,7 +458,7 @@ async function cmdCheck(silent = false) {
   });
 
   const roster = getRoster();
-  const messages = await ob.sync(lastSeq > 0 ? lastSeq : undefined);
+  const messages = await ob.sync(lastSeq > 0 ? lastSeq : 0);
 
   if (messages.length === 0) {
     if (!silent) console.log('没有新消息。');
@@ -710,6 +710,10 @@ async function cmdListen(onMessage, autoExec = false, projectDir = null) {
     identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
   });
 
+  // Reset global cursor to avoid cross-identity contamination
+  ob.cursor.lastSeq = 0;
+  await ob.cursor.save();
+
   const roster = getRoster();
 
   // ── Auto-exec task queue ───────────────────────────────────────────────
@@ -797,6 +801,9 @@ async function cmdListen(onMessage, autoExec = false, projectDir = null) {
   console.log('');
 
   ob.startListening(async (msg) => {
+    // Skip self-sent messages to prevent echo loop and auto-roster self-poisoning
+    if (msg.from_openid === creds.openid) return;
+
     let contact = await roster.findByOpenId(msg.from_openid);
     // Auto-manage Roster: add new contacts, update stale OpenIDs
     if (!contact) {
