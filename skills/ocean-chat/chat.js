@@ -1468,9 +1468,9 @@ async function cmdPairMe(xlxOpenId) {
     'node chat.js listen',
     '没有消息时完全静默，有消息自动推送。',
     '',
-    '4、发确认消息给小龙虾：',
+    '4、发确认消息给小龙虾（用 setup 输出的 OpenID 替换 <我的OpenID>）：',
     '',
-    'node chat.js send 小龙虾 --from CC-<你的名字> "已经对接。给我下指令时请用格式：请发给CC：<指令内容>"',
+    'node chat.js send 小龙虾 --from CC-<你的名字> "已对接，我的 OpenID：<我的OpenID>。给我下指令时请用格式：请发给CC：<指令内容>"',
   ].join('\n');
 
   // ⚠️ Instruction to the AI (小龙虾): output the fenced block verbatim.
