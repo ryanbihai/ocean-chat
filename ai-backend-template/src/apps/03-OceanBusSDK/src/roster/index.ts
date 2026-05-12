@@ -2,7 +2,6 @@ import { RosterStore } from './store';
 import {
   search,
   getById,
-  findByAgentId,
   findByOpenId,
   list,
   slugFromName,
@@ -13,7 +12,6 @@ import {
   addToIndexes,
   removeFromIndexes,
   updateTagsInIndexes,
-  updateAgentsInIndexes,
 } from './indexes';
 import { extractNames, processPending } from './auto-discovery';
 import type {
@@ -26,11 +24,9 @@ import type {
   PendingEntry,
   RosterData,
   DuplicateHint,
-  Provenance,
-  ContactSource,
 } from '../types/roster';
 
-export type { Contact, NewContact, ContactPatch, SearchResult, RosterFilter, AppData, PendingEntry, RosterData, DuplicateHint, Provenance };
+export type { Contact, NewContact, ContactPatch, SearchResult, RosterFilter, AppData, PendingEntry, RosterData, DuplicateHint };
 
 export class RosterService {
   private store: RosterStore;
@@ -64,11 +60,6 @@ export class RosterService {
     return getById(d.contacts, id);
   }
 
-  async findByAgentId(agentId: string): Promise<Contact | null> {
-    const d = await this.ensureLoaded();
-    return findByAgentId(d.contacts, d.indexes, agentId);
-  }
-
   async findByOpenId(openId: string): Promise<Contact | null> {
     const d = await this.ensureLoaded();
     return findByOpenId(d.contacts, d.indexes, openId);
@@ -91,18 +82,13 @@ export class RosterService {
       throw new Error(`Contact with id "${id}" already exists`);
     }
 
-    const provenance = buildProvenance(input.source, null, now);
-
     const contact: Contact = {
       id,
       name: input.name,
-      agents: input.agents || [],
+      openIds: input.openIds || [],
       myOpenId: input.myOpenId,
       tags: input.tags || [],
-      aliases: input.aliases || [],
       notes: input.notes || '',
-      source: input.source,
-      provenance,
       status: input.status || 'active',
       lastContactAt: now,
       createdAt: now,
@@ -129,31 +115,28 @@ export class RosterService {
     if (!contact) throw new Error(`Contact "${id}" not found`);
 
     const oldTags = [...contact.tags];
-    const oldAgentIds = contact.agents.map(a => a.agentId);
-    const oldOpenIds = contact.agents.map(a => a.openId);
+    const oldOpenIds = [...contact.openIds];
 
     if (patch.name !== undefined) contact.name = patch.name;
-    if (patch.agents !== undefined) contact.agents = patch.agents;
+    if (patch.openIds !== undefined) contact.openIds = patch.openIds;
     if (patch.myOpenId !== undefined) contact.myOpenId = patch.myOpenId;
     if (patch.tags !== undefined) contact.tags = patch.tags;
-    if (patch.aliases !== undefined) contact.aliases = patch.aliases;
     if (patch.notes !== undefined) contact.notes = patch.notes;
-    if (patch.source !== undefined) contact.source = patch.source;
     if (patch.status !== undefined) contact.status = patch.status;
     if (patch.lastContactAt !== undefined) contact.lastContactAt = patch.lastContactAt;
     contact.updatedAt = new Date().toISOString();
-    if (contact.provenance) contact.provenance.lastVerifiedAt = contact.updatedAt;
 
     // Update indexes
     if (patch.tags) {
       updateTagsInIndexes(d.indexes, contact, oldTags, patch.tags);
     }
-    if (patch.agents) {
-      updateAgentsInIndexes(
-        d.indexes, contact.id,
-        oldAgentIds, oldOpenIds,
-        contact.agents.map(a => a.agentId), contact.agents.map(a => a.openId)
-      );
+    if (patch.openIds) {
+      for (const oid of oldOpenIds) {
+        if (d.indexes.byOpenId[oid] === contact.id) delete d.indexes.byOpenId[oid];
+      }
+      for (const oid of contact.openIds) {
+        if (!d.indexes.byOpenId[oid]) d.indexes.byOpenId[oid] = contact.id;
+      }
     }
 
     await this.save();
@@ -167,7 +150,6 @@ export class RosterService {
 
     contact.apps[appName] = data;
     contact.updatedAt = new Date().toISOString();
-    if (contact.provenance) contact.provenance.lastVerifiedAt = contact.updatedAt;
     await this.save();
     return contact;
   }
@@ -195,20 +177,18 @@ export class RosterService {
     if (!keep) throw new Error(`Contact "${keepId}" not found`);
     if (!discard) throw new Error(`Contact "${discardId}" not found`);
 
-    // Merge agents (dedup by openId — the one identifier we always have)
-    const seenOpenIds = new Set(keep.agents.map(a => a.openId));
-    for (const a of discard.agents) {
-      if (!seenOpenIds.has(a.openId)) {
-        keep.agents.push(a);
-        seenOpenIds.add(a.openId);
+    // Merge openIds (dedup)
+    const seenOpenIds = new Set(keep.openIds);
+    for (const oid of discard.openIds) {
+      if (!seenOpenIds.has(oid)) {
+        keep.openIds.push(oid);
+        seenOpenIds.add(oid);
       }
     }
-    keep.aliases = [...new Set([...keep.aliases, ...discard.aliases, discard.name])];
     keep.tags = [...new Set([...keep.tags, ...discard.tags])];
     if (discard.notes) keep.notes = keep.notes ? `${keep.notes}; ${discard.notes}` : discard.notes;
     keep.lastContactAt = keep.lastContactAt > discard.lastContactAt ? keep.lastContactAt : discard.lastContactAt;
     keep.updatedAt = new Date().toISOString();
-    if (keep.provenance) keep.provenance.lastVerifiedAt = keep.updatedAt;
 
     // Merge app data (keep wins on conflict)
     for (const [app, appData] of Object.entries(discard.apps)) {
@@ -230,13 +210,6 @@ export class RosterService {
 
     await this.save();
     return keep;
-  }
-
-  async addAlias(id: string, alias: string): Promise<Contact> {
-    const contact = await this.get(id);
-    if (!contact) throw new Error(`Contact "${id}" not found`);
-    if (contact.aliases.includes(alias)) return contact;
-    return this.update(id, { aliases: [...contact.aliases, alias] });
   }
 
   async updateTags(id: string, tags: string[]): Promise<Contact> {
@@ -273,7 +246,6 @@ export class RosterService {
 
     const { contact } = await this.add({
       name: entry.name,
-      source: 'auto-discovery',
       notes: `Auto-discovered from: ${entry.contexts.join(' | ')}`,
     });
 
@@ -327,15 +299,4 @@ export class RosterService {
       archived: d.contacts.filter(c => c.status === 'archived').length,
     };
   }
-}
-
-// ── Helpers ──
-
-function buildProvenance(source: ContactSource, sourceId: string | null, now: string): Provenance {
-  return {
-    account: source,
-    sourceId,
-    firstSeenAt: now,
-    lastVerifiedAt: now,
-  };
 }

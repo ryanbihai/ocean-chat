@@ -259,8 +259,7 @@ export const oceanbusAddContactTool = tool(
     try {
       const { RosterService } = await import("oceanbus");
       const roster = new RosterService();
-      const agent = { agentId: "", openId: openid, purpose: "OceanBus 联系人", isDefault: true };
-      await roster.add({ name, agents: [agent], tags: tags || [], source: "manual" });
+      await roster.add({ name, openIds: [openid], tags: tags || [] });
       return JSON.stringify({ success: true, message: `已添加联系人: ${name}` });
     } catch (error: any) {
       return JSON.stringify({ success: false, error: error.message });
@@ -293,7 +292,7 @@ export const oceanbusListContactsTool = tool(
         count: contacts.length,
         contacts: contacts.map(c => ({
           name: c.name,
-          openid: c.agents[0]?.openId || "",
+          openid: c.openIds[0] || "",
           tags: c.tags,
           lastContact: c.lastContactAt,
         })),
@@ -329,9 +328,8 @@ export const oceanbusShowContactTool = tool(
       return JSON.stringify({
         success: true,
         name: c.name,
-        openid: c.agents[0]?.openId || "",
+        openid: c.openIds[0] || "",
         tags: c.tags,
-        aliases: c.aliases,
         notes: c.notes,
         lastContact: c.lastContactAt,
       });

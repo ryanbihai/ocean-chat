@@ -27,9 +27,8 @@ export const addCommand: CommandModule = {
       try {
         await ob.roster.add({
           name: argv.name,
-          source: 'manual',
           myOpenId,
-          agents: [{ agentId: '', openId: argv.openid, purpose: '', isDefault: true }],
+          openIds: [argv.openid],
         });
       } catch { /* may already exist */ }
 

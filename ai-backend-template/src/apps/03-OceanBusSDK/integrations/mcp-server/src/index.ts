@@ -555,8 +555,7 @@ server.tool(
     telem.record("add_contact");
     try {
       const roster = getRoster();
-      const agent = { agentId: "", openId: openid, purpose: "OceanBus 联系人", isDefault: true };
-      await roster.add({ name, agents: [agent], tags: tags || [], source: "manual" });
+      await roster.add({ name, openIds: [openid], tags: tags || [] });
       return {
         content: [{ type: "text", text: JSON.stringify({
           success: true,
@@ -588,10 +587,9 @@ server.tool(
           count: contacts.length,
           contacts: contacts.map(c => ({
             name: c.name,
-            openid: c.agents[0]?.openId || "",
+            openid: c.openIds[0] || "",
             tags: c.tags,
             lastContact: c.lastContactAt,
-            source: c.source,
           })),
         }, null, 2) }],
       };
@@ -631,12 +629,10 @@ server.tool(
         content: [{ type: "text", text: JSON.stringify({
           success: true,
           name: c.name,
-          openid: c.agents[0]?.openId || "",
+          openid: c.openIds[0] || "",
           tags: c.tags,
-          aliases: c.aliases,
           notes: c.notes,
           lastContact: c.lastContactAt,
-          source: c.source,
         }, null, 2) }],
       };
     } catch (error: any) {

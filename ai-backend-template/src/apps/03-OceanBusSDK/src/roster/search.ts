@@ -8,8 +8,7 @@ function toMatchEntry(c: Contact, field: MatchEntry['matchField'], highlight: st
     highlight,
     tags: c.tags,
     notes: c.notes.slice(0, 80),
-    agents: c.agents,
-    source: c.source,
+    openIds: c.openIds,
   };
 }
 
@@ -28,8 +27,8 @@ function containsNormalized(target: string, query: string): boolean {
 
 /**
  * Search contacts with conservative fuzzy matching.
- * Exact: query matches id, name, or any alias exactly (case-insensitive).
- * Fuzzy: query is a substring of name or alias (after normalizing spaces/punctuation).
+ * Exact: query matches id or name exactly (case-insensitive).
+ * Fuzzy: query is a substring of name (after normalizing spaces/punctuation).
  * byTag: query matches any tag.
  * byNote: query appears in notes.
  *
@@ -50,7 +49,7 @@ export function search(contacts: Contact[], query: string): SearchResult {
   const active = contacts.filter(c => c.status === 'active' || c.status === 'pending');
 
   for (const c of active) {
-    // Exact: id, name, aliases
+    // Exact: id or name
     if (c.id.toLowerCase() === qLower) {
       exactIds.add(c.id);
       continue;
@@ -59,17 +58,9 @@ export function search(contacts: Contact[], query: string): SearchResult {
       exactIds.add(c.id);
       continue;
     }
-    if (c.aliases.some(a => a.toLowerCase() === qLower)) {
-      exactIds.add(c.id);
-      continue;
-    }
 
-    // Fuzzy: name or alias contains query after normalization
+    // Fuzzy: name contains query after normalization
     if (containsNormalized(c.name, trimmed)) {
-      fuzzyIds.add(c.id);
-      continue;
-    }
-    if (c.aliases.some(a => containsNormalized(a, trimmed))) {
       fuzzyIds.add(c.id);
       continue;
     }
@@ -112,24 +103,14 @@ export function getById(contacts: Contact[], id: string): Contact | null {
   return contacts.find(c => c.id === id && c.status !== 'archived') || null;
 }
 
-export function findByAgentId(contacts: Contact[], indexes: { byAgentId: Record<string, string> }, agentId: string): Contact | null {
-  if (!agentId) return null; // external contacts never have agentId
-  const contactId = indexes.byAgentId[agentId];
-  if (contactId) {
-    const c = getById(contacts, contactId);
-    if (c) return c;
-  }
-  return contacts.find(c => c.status !== 'archived' && c.agents.some(a => a.agentId === agentId)) || null;
-}
-
 export function findByOpenId(contacts: Contact[], indexes: { byOpenId: Record<string, string> }, openId: string): Contact | null {
-  // Try index first, fall back to full scan (handles multiple contacts sharing same OpenID)
+  // Try index first, fall back to full scan
   const contactId = indexes.byOpenId[openId];
   if (contactId) {
     const c = getById(contacts, contactId);
     if (c) return c;
   }
-  return contacts.find(c => c.status !== 'archived' && c.agents.some(a => a.openId === openId)) || null;
+  return contacts.find(c => c.status !== 'archived' && c.openIds.includes(openId)) || null;
 }
 
 export function list(contacts: Contact[], filter?: RosterFilter): Contact[] {
@@ -137,9 +118,6 @@ export function list(contacts: Contact[], filter?: RosterFilter): Contact[] {
 
   if (filter?.status) {
     result = result.filter(c => c.status === filter.status);
-  }
-  if (filter?.source) {
-    result = result.filter(c => c.source === filter.source);
   }
   if (filter?.tags && filter.tags.length > 0) {
     result = result.filter(c => filter.tags!.some(t => c.tags.includes(t)));
@@ -168,7 +146,7 @@ export function slugFromName(name: string): string {
   return name
     .trim()
     .replace(/\s+/g, '-')
-    .replace(/（/g, '(').replace(/）/g, ')')  // normalize fullwidth parens (must come before filter)
+    .replace(/（/g, '(').replace(/）/g, ')')
     .replace(/[^a-zA-Z0-9一-鿿\-_()]/g, '')
     .toLowerCase()
     || `contact_${Date.now()}`;
@@ -180,8 +158,7 @@ export function slugFromName(name: string): string {
  * Check if a new or updated contact looks like a duplicate of an existing one.
  * Rules (in priority order):
  *   1. Same OpenID — high confidence (0.95)
- *   2. Same AgentID — high confidence (0.90)
- *   3. Name highly similar — medium confidence (0.60–0.85)
+ *   2. Name highly similar — medium confidence (0.60–0.85)
  *
  * Returns hints for NEW potential duplicates not already in existingHints.
  */
@@ -197,7 +174,6 @@ export function findDuplicates(
   const hintedThisCall = new Set<string>();
 
   for (const c of active) {
-    // Already has a hint for this pair (from existing or this call)?
     const pairKey = incoming.id < c.id ? `${incoming.id}|${c.id}` : `${c.id}|${incoming.id}`;
     const alreadyHinted = existingHints.some(h =>
       (h.contactA === incoming.id && h.contactB === c.id) ||
@@ -208,39 +184,20 @@ export function findDuplicates(
     let matched = false;
 
     // Rule 1: Same OpenID
-    for (const a of incoming.agents) {
-      if (!a.openId || matched) break;
-      for (const b of c.agents) {
-        if (!b.openId) continue;
-        if (a.openId === b.openId) {
-          newHints.push(makeHint(incoming.id, c.id, 'same_openid', `Both have OpenID ${a.openId.slice(0, 16)}...`, 0.95, now));
-          hintedThisCall.add(pairKey);
-          matched = true;
-          break;
-        }
+    for (const oid of incoming.openIds) {
+      if (!oid || matched) break;
+      if (c.openIds.includes(oid)) {
+        newHints.push(makeHint(incoming.id, c.id, 'same_openid', `Both have OpenID ${oid.slice(0, 16)}...`, 0.95, now));
+        hintedThisCall.add(pairKey);
+        matched = true;
+        break;
       }
     }
 
-    // Rule 2: Same AgentID
-    if (!matched) {
-      for (const a of incoming.agents) {
-        if (!a.agentId || matched) break;
-        for (const b of c.agents) {
-          if (!b.agentId) continue;
-          if (a.agentId === b.agentId) {
-            newHints.push(makeHint(incoming.id, c.id, 'same_agentId', `Both have Agent ID ${a.agentId.slice(0, 12)}...`, 0.90, now));
-            hintedThisCall.add(pairKey);
-            matched = true;
-            break;
-          }
-        }
-      }
-    }
-
-    // Rule 3: Name similarity (after normalization)
+    // Rule 2: Name similarity (after normalization)
     if (!matched) {
       const sim = nameSimilarity(incoming.name, c.name);
-      if (sim >= 0.75 && !hasSameOpenIdOrAgentId(incoming, c)) {
+      if (sim >= 0.75 && !hasSameOpenId(incoming, c)) {
         newHints.push(makeHint(incoming.id, c.id, 'name_similarity', `Names similar (score ${sim.toFixed(2)}): "${incoming.name}" ≈ "${c.name}"`, sim, now));
         hintedThisCall.add(pairKey);
       }
@@ -256,18 +213,15 @@ export function dismissHintsForContact(hints: DuplicateHint[], contactId: string
 }
 
 function makeHint(a: string, b: string, reason: DuplicateReason, detail: string, confidence: number, now: string): DuplicateHint {
-  // Canonical order: smaller id first
   const [contactA, contactB] = a < b ? [a, b] : [b, a];
   return { contactA, contactB, reason, detail, confidence, createdAt: now };
 }
 
-function hasSameOpenIdOrAgentId(a: Contact, b: Contact): boolean {
-  const aOpenIds = new Set(a.agents.map(x => x.openId).filter(Boolean));
-  const bOpenIds = new Set(b.agents.map(x => x.openId).filter(Boolean));
-  for (const oid of aOpenIds) { if (bOpenIds.has(oid)) return true; }
-  const aAgentIds = new Set(a.agents.map(x => x.agentId).filter(Boolean));
-  const bAgentIds = new Set(b.agents.map(x => x.agentId).filter(Boolean));
-  for (const aid of aAgentIds) { if (bAgentIds.has(aid)) return true; }
+function hasSameOpenId(a: Contact, b: Contact): boolean {
+  const aSet = new Set(a.openIds.filter(Boolean));
+  for (const oid of b.openIds) {
+    if (aSet.has(oid)) return true;
+  }
   return false;
 }
 
@@ -277,7 +231,6 @@ function nameSimilarity(a: string, b: string): number {
   if (na === nb) return 1.0;
   if (na.length === 0 || nb.length === 0) return 0;
 
-  // Simple edit distance normalized
   const dist = editDistance(na, nb);
   const maxLen = Math.max(na.length, nb.length);
   return 1 - dist / maxLen;

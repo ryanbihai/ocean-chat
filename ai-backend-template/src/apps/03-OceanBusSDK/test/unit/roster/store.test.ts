@@ -20,12 +20,11 @@ describe('RosterStore', () => {
 
   it('creates default roster on first load', async () => {
     const data = await store.load();
-    expect(data.version).toBe(2);
+    expect(data.version).toBe(3);
     expect(data.contacts).toEqual([]);
     expect(data.autoDiscovery.enabled).toBe(true);
     expect(data.autoDiscovery.minMentions).toBe(3);
     expect(data.indexes.byTag).toEqual({});
-    expect(data.indexes.byAgentId).toEqual({});
     expect(data.indexes.byOpenId).toEqual({});
   });
 
@@ -34,12 +33,9 @@ describe('RosterStore', () => {
     data.contacts.push({
       id: 'test',
       name: 'Test',
-      agents: [],
+      openIds: [],
       tags: [],
-      aliases: [],
       notes: '',
-      source: 'manual',
-      provenance: { account: 'manual', sourceId: null, firstSeenAt: new Date().toISOString(), lastVerifiedAt: new Date().toISOString() },
       status: 'active',
       lastContactAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
@@ -48,7 +44,6 @@ describe('RosterStore', () => {
     });
     await store.save(data);
 
-    // Re-read
     store.invalidate();
     const reloaded = await store.load();
     expect(reloaded.contacts).toHaveLength(1);
@@ -66,11 +61,10 @@ describe('RosterStore', () => {
   });
 
   it('delete removes the file', async () => {
-    await store.load(); // creates file
+    await store.load();
     await store.delete();
     try {
       await fs.promises.access(testPath);
-      // Should not reach here
       expect('file should not exist').toBe(false);
     } catch {
       // Expected: file not found
@@ -87,5 +81,39 @@ describe('RosterStore', () => {
     await new Promise(r => setTimeout(r, 10));
     await store.save(data);
     expect(data.updatedAt).not.toBe(before);
+  });
+
+  it('migrates v2 agents to v3 openIds', async () => {
+    // Write v2-format data directly
+    const v2data = {
+      version: 2,
+      updatedAt: '2026-05-01T00:00:00Z',
+      contacts: [{
+        id: 'laowang', name: '老王',
+        agents: [{ openId: 'open_001', purpose: '日常助手', isDefault: true }],
+        aliases: ['王总'],
+        source: 'manual',
+        provenance: { account: 'manual', sourceId: null, firstSeenAt: '2026-05-01', lastVerifiedAt: '2026-05-01' },
+        tags: ['friend'], notes: '大学同学',
+        status: 'active',
+        lastContactAt: '2026-05-01T00:00:00Z',
+        createdAt: '2026-05-01T00:00:00Z',
+        updatedAt: '2026-05-01T00:00:00Z',
+        apps: {},
+      }],
+      identities: [], autoDiscovery: null, indexes: null, duplicateHints: [],
+    };
+    await fs.promises.writeFile(testPath, JSON.stringify(v2data));
+
+    store.invalidate();
+    const loaded = await store.load();
+    expect(loaded.version).toBe(3);
+    expect(loaded.contacts).toHaveLength(1);
+    const c = loaded.contacts[0];
+    expect(c.openIds).toEqual(['open_001']);
+    expect((c as any).agents).toBeUndefined();
+    expect((c as any).aliases).toBeUndefined();
+    expect((c as any).source).toBeUndefined();
+    expect((c as any).provenance).toBeUndefined();
   });
 });

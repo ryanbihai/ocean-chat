@@ -430,13 +430,12 @@ const ob = await createOceanBus();
 // 添加联系人
 await ob.roster.add({
   name: '老王',
-  agents: [{ agentId: '', openId: '对方OpenID', purpose: '同事', isDefault: true }],
+  openIds: ['对方OpenID'],
   tags: ['colleague', 'finance'],
   notes: '财务部，喜欢川菜',
-  source: 'manual',
 });
 
-// 搜索（支持模糊匹配、别名、标签、备注）
+// 搜索（支持模糊匹配、标签、备注）
 const result = await ob.roster.search('老王');
 // result.exact   — 精确匹配
 // result.fuzzy   — 模糊匹配
@@ -448,7 +447,6 @@ const contact = await ob.roster.get('laowang');
 // 修改
 await ob.roster.update('laowang', { notes: '已调岗到市场部' });
 await ob.roster.updateTags('laowang', ['colleague', 'marketing']);
-await ob.roster.addAlias('laowang', '王总');
 
 // 列出全部
 const all = await ob.roster.list();

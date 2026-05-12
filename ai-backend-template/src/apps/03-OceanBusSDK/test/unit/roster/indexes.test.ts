@@ -3,21 +3,16 @@ import {
   addToIndexes,
   removeFromIndexes,
   updateTagsInIndexes,
-  updateAgentsInIndexes,
 } from '../../../src/roster/indexes';
 
 function makeContact(overrides: Partial<Contact> = {}): Contact {
   return {
     id: 'c1',
     name: 'Test',
-    agents: [
-      { agentId: 'agent_1', openId: 'open_1', purpose: 'default', isDefault: true },
-    ],
+    openIds: ['open_1'],
     tags: ['friend', 'colleague'],
-    aliases: [],
     notes: '',
     lastContactAt: '2026-05-01T00:00:00Z',
-    source: 'manual',
     status: 'active',
     createdAt: '2026-05-01T00:00:00Z',
     updatedAt: '2026-05-01T00:00:00Z',
@@ -27,7 +22,7 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
 }
 
 function emptyIndexes(): RosterIndexes {
-  return { byTag: {}, byAgentId: {}, byOpenId: {} };
+  return { byTag: {}, byOpenId: {} };
 }
 
 describe('roster indexes', () => {
@@ -39,10 +34,9 @@ describe('roster indexes', () => {
       expect(idx.byTag.colleague).toEqual(['c1']);
     });
 
-    it('adds agentId and openId mappings', () => {
+    it('adds openId mapping', () => {
       const idx = emptyIndexes();
       addToIndexes(idx, makeContact());
-      expect(idx.byAgentId.agent_1).toBe('c1');
       expect(idx.byOpenId.open_1).toBe('c1');
     });
 
@@ -62,11 +56,10 @@ describe('roster indexes', () => {
       expect(idx.byTag.friend).toBeUndefined();
     });
 
-    it('removes agentId and openId', () => {
+    it('removes openId', () => {
       const idx = emptyIndexes();
       addToIndexes(idx, makeContact());
       removeFromIndexes(idx, makeContact());
-      expect(idx.byAgentId.agent_1).toBeUndefined();
       expect(idx.byOpenId.open_1).toBeUndefined();
     });
 
@@ -93,21 +86,4 @@ describe('roster indexes', () => {
     });
   });
 
-  describe('updateAgentsInIndexes', () => {
-    it('replaces agentId and openId mappings', () => {
-      const idx = emptyIndexes();
-      addToIndexes(idx, makeContact());
-
-      updateAgentsInIndexes(
-        idx, 'c1',
-        ['agent_1'], ['open_1'],
-        ['agent_2'], ['open_2']
-      );
-
-      expect(idx.byAgentId.agent_1).toBeUndefined();
-      expect(idx.byAgentId.agent_2).toBe('c1');
-      expect(idx.byOpenId.open_1).toBeUndefined();
-      expect(idx.byOpenId.open_2).toBe('c1');
-    });
-  });
 });

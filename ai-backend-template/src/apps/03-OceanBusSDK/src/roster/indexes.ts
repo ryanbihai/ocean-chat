@@ -5,11 +5,8 @@ export function addToIndexes(indexes: RosterIndexes, contact: Contact): void {
     if (!indexes.byTag[tag]) indexes.byTag[tag] = [];
     if (!indexes.byTag[tag].includes(contact.id)) indexes.byTag[tag].push(contact.id);
   }
-  for (const a of contact.agents) {
-    // OpenID is always known (it's the public address). agentId is only known for our own identities.
-    // Don't overwrite existing mapping — keep the first (most stable) reference.
-    if (!indexes.byOpenId[a.openId]) indexes.byOpenId[a.openId] = contact.id;
-    if (a.agentId && !indexes.byAgentId[a.agentId]) indexes.byAgentId[a.agentId] = contact.id;
+  for (const oid of contact.openIds) {
+    if (!indexes.byOpenId[oid]) indexes.byOpenId[oid] = contact.id;
   }
 }
 
@@ -21,9 +18,8 @@ export function removeFromIndexes(indexes: RosterIndexes, contact: Contact): voi
       if (indexes.byTag[tag].length === 0) delete indexes.byTag[tag];
     }
   }
-  for (const a of contact.agents) {
-    if (indexes.byOpenId[a.openId] === contact.id) delete indexes.byOpenId[a.openId];
-    if (a.agentId && indexes.byAgentId[a.agentId] === contact.id) delete indexes.byAgentId[a.agentId];
+  for (const oid of contact.openIds) {
+    if (indexes.byOpenId[oid] === contact.id) delete indexes.byOpenId[oid];
   }
 }
 
@@ -41,18 +37,5 @@ export function updateTagsInIndexes(indexes: RosterIndexes, contact: Contact, ol
       indexes.byTag[tag] = list.filter(id => id !== contact.id);
       if (indexes.byTag[tag].length === 0) delete indexes.byTag[tag];
     }
-  }
-}
-
-export function updateAgentsInIndexes(indexes: RosterIndexes, contactId: string, oldAgentIds: string[], oldOpenIds: string[], newAgentIds: string[], newOpenIds: string[]): void {
-  for (const aid of oldAgentIds) {
-    if (indexes.byAgentId[aid] === contactId) delete indexes.byAgentId[aid];
-  }
-  for (const oid of oldOpenIds) {
-    if (indexes.byOpenId[oid] === contactId) delete indexes.byOpenId[oid];
-  }
-  for (let i = 0; i < newAgentIds.length; i++) {
-    indexes.byOpenId[newOpenIds[i]] = contactId;
-    if (newAgentIds[i]) indexes.byAgentId[newAgentIds[i]] = contactId;
   }
 }

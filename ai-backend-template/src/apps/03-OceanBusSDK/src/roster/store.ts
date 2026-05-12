@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import type { RosterData } from '../types/roster';
 
-const CURRENT_VERSION = 2;
+const CURRENT_VERSION = 3;
 
 function getDefaultRosterDir(): string {
   return path.join(os.homedir(), '.oceanbus');
@@ -24,7 +24,6 @@ function emptyRoster(): RosterData {
     },
     indexes: {
       byTag: {},
-      byAgentId: {},
       byOpenId: {},
     },
     duplicateHints: [],
@@ -84,15 +83,38 @@ export class RosterStore {
 }
 
 function migrate(data: RosterData): RosterData {
-  if (!data.version || data.version < 2) {
-    return migrateV1toV2(data);
-  }
+  const v = data.version || 0;
+  if (v < 2) return migrateV1toV2(data);
+  if (v < 3) return migrateV2toV3(data);
   return data;
+}
+
+function migrateV2toV3(data: RosterData): RosterData {
+  const contacts = (data.contacts || []).map(c => ({
+    ...c,
+    // agents[{openId,purpose,isDefault}] → openIds[string]
+    openIds: (c as any).agents?.map((a: any) => a.openId) || (c as any).openIds || [],
+  }));
+  // Strip deprecated fields
+  for (const c of contacts) {
+    delete (c as any).agents;
+    delete (c as any).aliases;
+    delete (c as any).source;
+    delete (c as any).provenance;
+  }
+  return {
+    version: 3,
+    updatedAt: data.updatedAt || new Date().toISOString(),
+    contacts,
+    identities: data.identities || [],
+    autoDiscovery: data.autoDiscovery || emptyRoster().autoDiscovery,
+    indexes: data.indexes || rebuildIndexes(contacts),
+    duplicateHints: data.duplicateHints || [],
+  };
 }
 
 function migrateV1toV2(data: RosterData): RosterData {
   const now = new Date().toISOString();
-  // v1→v2: ensure indexes, autoDiscovery, identities, provenance, duplicateHints exist
   return {
     version: 2,
     updatedAt: data.updatedAt || now,
@@ -100,8 +122,6 @@ function migrateV1toV2(data: RosterData): RosterData {
       ...c,
       status: c.status || 'active',
       apps: c.apps || {},
-      aliases: c.aliases || [],
-      provenance: c.provenance || { account: c.source || 'manual', sourceId: null, firstSeenAt: c.createdAt || now, lastVerifiedAt: c.createdAt || now },
     })),
     identities: data.identities || [],
     autoDiscovery: data.autoDiscovery || emptyRoster().autoDiscovery,
@@ -111,15 +131,14 @@ function migrateV1toV2(data: RosterData): RosterData {
 }
 
 function rebuildIndexes(contacts: RosterData['contacts']): RosterData['indexes'] {
-  const indexes: RosterData['indexes'] = { byTag: {}, byAgentId: {}, byOpenId: {} };
+  const indexes: RosterData['indexes'] = { byTag: {}, byOpenId: {} };
   for (const c of contacts) {
     for (const tag of c.tags) {
       if (!indexes.byTag[tag]) indexes.byTag[tag] = [];
       if (!indexes.byTag[tag].includes(c.id)) indexes.byTag[tag].push(c.id);
     }
-    for (const a of c.agents) {
-      indexes.byAgentId[a.agentId] = c.id;
-      indexes.byOpenId[a.openId] = c.id;
+    for (const oid of c.openIds) {
+      indexes.byOpenId[oid] = c.id;
     }
   }
   return indexes;

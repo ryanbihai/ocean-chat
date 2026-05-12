@@ -147,10 +147,9 @@ async function main() {
   try {
     await alice.roster.add({
       name: 'Bob',
-      agents: [{ agentId: '', openId: bobOpenid, purpose: '球友', isDefault: true }],
+      openIds: [bobOpenid],
       tags: ['friend', 'badminton'],
       notes: '周六羽毛球搭档',
-      source: 'manual',
     });
     ok('Alice 已添加 Bob 到通讯录');
   } catch (e) {

@@ -1,10 +1,14 @@
-// ── Agent reference ──
+// ── Agent reference (only for self-identity, not contacts) ──
 
 export interface AgentRef {
-  agentId: string;       // OceanBus UUID (only known for own identities; empty for external contacts)
   openId: string;        // Public address (always known)
   purpose: string;
   isDefault: boolean;
+}
+
+/** AgentRef with the agent's own OceanBus UUID — only for UserIdentity (self). */
+export interface IdentityAgentRef extends AgentRef {
+  agentId: string;       // OceanBus UUID (only known for own identities)
 }
 
 // ── App extension data ──
@@ -14,28 +18,16 @@ export type AppData = Record<string, unknown>;
 
 // ── Contact ──
 
-export type ContactSource = 'manual' | 'yellow-pages' | 'auto-discovery' | 'chat' | 'system';
 export type ContactStatus = 'active' | 'pending' | 'archived';
-
-/** Rich source tracking — tells us WHERE the contact came from and WHEN. */
-export interface Provenance {
-  account: ContactSource;
-  sourceId: string | null;  // ID in the source system (e.g. Yellow Pages entry ID). null for manual.
-  firstSeenAt: string;      // ISO timestamp — when was first discovered
-  lastVerifiedAt: string;   // ISO timestamp — last time source data was confirmed valid
-}
 
 export interface Contact {
   id: string;
   name: string;
-  agents: AgentRef[];                       // 对方的 Agent 信息
-  myOpenId?: string;                        // 我分配给该联系人的专属 OpenID（保证会话连续性）
+  openIds: string[];                         // 对方的公开地址（多设备多值，[0]=默认发消息目标）
+  myOpenId?: string;                         // 我用哪个 OpenID 面对他
   tags: string[];
-  aliases: string[];
   notes: string;
   lastContactAt: string;
-  source: ContactSource;                    // @deprecated — use provenance instead
-  provenance?: Provenance;                 // rich source metadata (v2)
   status: ContactStatus;
   createdAt: string;
   updatedAt: string;
@@ -47,12 +39,10 @@ export interface Contact {
 export interface NewContact {
   name: string;
   id?: string;
-  agents?: AgentRef[];
-  myOpenId?: string;                        // 预先分配的专属 OpenID
-  aliases?: string[];
+  openIds?: string[];
+  myOpenId?: string;
   tags?: string[];
   notes?: string;
-  source: ContactSource;
   status?: ContactStatus;
 }
 
@@ -60,12 +50,10 @@ export interface NewContact {
 
 export interface ContactPatch {
   name?: string;
-  agents?: AgentRef[];
+  openIds?: string[];
   myOpenId?: string;
-  aliases?: string[];
   tags?: string[];
   notes?: string;
-  source?: ContactSource;
   status?: ContactStatus;
   lastContactAt?: string;
 }
@@ -76,7 +64,7 @@ export interface UserIdentity {
   id: string;
   name: string;
   purpose: string;
-  agents: AgentRef[];
+  agents: IdentityAgentRef[];
 }
 
 // ── Auto-discovery ──
@@ -102,7 +90,6 @@ export interface AutoDiscoveryConfig {
 
 export interface RosterIndexes {
   byTag: Record<string, string[]>;
-  byAgentId: Record<string, string>;
   byOpenId: Record<string, string>;
 }
 
@@ -111,12 +98,11 @@ export interface RosterIndexes {
 export interface MatchEntry {
   id: string;
   name: string;
-  matchField: 'id' | 'name' | 'alias' | 'tag' | 'note';
+  matchField: 'id' | 'name' | 'tag' | 'note';
   highlight: string;
   tags: string[];
   notes: string;
-  agents: AgentRef[];
-  source: ContactSource;
+  openIds: string[];
 }
 
 export interface SearchResult {
@@ -129,7 +115,7 @@ export interface SearchResult {
 
 // ── Duplicate detection ──
 
-export type DuplicateReason = 'same_openid' | 'same_agentId' | 'name_similarity';
+export type DuplicateReason = 'same_openid' | 'name_similarity';
 
 export interface DuplicateHint {
   contactA: string;       // contact id
@@ -144,7 +130,6 @@ export interface DuplicateHint {
 
 export interface RosterFilter {
   tags?: string[];
-  source?: string;
   status?: string;
   sortBy?: 'name' | 'lastContactAt' | 'createdAt';
   order?: 'asc' | 'desc';
