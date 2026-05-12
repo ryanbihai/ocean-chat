@@ -84,4 +84,23 @@ OceanBus 生态
 ---
 ---
 
-> 最后更新：2026-05-07。各子文件独立维护，本文档只做索引、平台总览和待跟进事项。新增平台时更新平台总览表和生态资产树。事项完成后更新本表。
+> 最后更新：2026-05-13。各子文件独立维护，本文档只做索引、平台总览和待跟进事项。新增平台时更新平台总览表和生态资产树。事项完成后更新本表。
+
+## ⚠️ 教训：Monorepo 多 Remote 操作事故
+
+**日期**：2026-05-12
+
+**事故**：在 monorepo 的 `skills/ocean-agent/` 目录下执行 `git reset --hard skill-ocean-agent/master`，导致整个 monorepo 工作区被覆盖为独立 ocean-agent 仓库的内容。所有文档（OceanBusDocs/、docs/）、所有 skill 代码（ocean-chat/、captain-lobster/ 等）、dashboard.html 全部丢失。
+
+**根因**：
+- Monorepo 的每个 `skills/<name>/` 目录有独立的 git remote（如 `skill-ocean-agent`），指向各自独立的 GitHub 仓库
+- 这些独立仓库的文件结构与 monorepo 完全不同
+- `git reset --hard <remote>/master` 会将整个工作区切换到该 remote 的文件树，覆盖所有同级目录
+
+**恢复**：`git checkout origin/master -- .` 从 monorepo 远程恢复全部文件，然后重新应用本地修改。
+
+**规则（加入检查清单）**：
+1. **禁止**在 monorepo 子目录下执行 `git reset --hard <skill-remote>/master`
+2. 如必须操作 skill 独立 remote，只 `checkout` 特定文件，不用 `reset --hard`
+3. 推送 skill 代码到独立 remote：`git push <skill-remote> HEAD:master --force`
+4. 操作前确认当前分支和 remote 指向：`git remote -v && git branch`
