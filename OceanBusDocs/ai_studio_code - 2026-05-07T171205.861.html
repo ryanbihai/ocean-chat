@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>好啦科技 - AI驱动的体检基础设施</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; background-color: #f8fafc; transition: background-color 0.4s ease; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        /* GUI 视觉层 */
+        .gui-layer { position: fixed; inset: 0; z-index: -2; pointer-events: none; transition: opacity 0.4s ease; }
+        .grid-bg { position: absolute; inset: 0; background-image: linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.6) 1px, transparent 1px); background-size: 40px 40px; }
+        .glow-point { position: absolute; border-radius: 50%; filter: blur(90px); }
+        
+        .glass-panel { background: rgba(255, 255, 255, 0.75); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); border-radius: 1.5rem; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .glass-panel:hover { box-shadow: 0 12px 30px -8px rgba(37, 99, 235, 0.08); transform: translateY(-2px); border-color: rgba(219, 234, 254, 0.9); }
+
+        /* Cmd+K 模态框 */
+        .cmdk-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; display: flex; align-items: flex-start; justify-content: center; padding-top: 15vh; }
+        .cmdk-overlay.active { opacity: 1; pointer-events: auto; }
+        .cmdk-modal { width: 100%; max-width: 640px; background: white; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); transform: scale(0.95); transition: transform 0.2s ease; overflow: hidden; border: 1px solid #e2e8f0; }
+        .cmdk-overlay.active .cmdk-modal { transform: scale(1); }
+
+        /* CLI 极客模式 */
+        .cli-view { display: none; padding: 120px 20px 80px; max-width: 1100px; margin: 0 auto; }
+        body.cli-mode { background-color: #09090b; color: #10b981; font-family: 'SF Mono', Consolas, Menlo, monospace; }
+        body.cli-mode .gui-view, body.cli-mode .gui-layer { display: none !important; }
+        body.cli-mode .cli-view { display: block !important; animation: fadeIn 0.4s ease; }
+        
+        .terminal-window { background: #18181b; border: 1px solid #27272a; border-radius: 12px; overflow: hidden; margin-bottom: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; }
+        .terminal-header { background: #27272a; padding: 10px 16px; display: flex; align-items: center; font-size: 12px; color: #a1a1aa; border-bottom: 1px solid #3f3f46; }
+        .terminal-dots { display: flex; gap: 6px; margin-right: 16px; }
+        .terminal-dots span { width: 10px; height: 10px; border-radius: 50%; }
+        .dot-r { background: #ef4444; } .dot-y { background: #eab308; } .dot-g { background: #22c55e; }
+        .terminal-body { padding: 24px; font-size: 13px; line-height: 1.6; overflow-x: auto; flex-grow: 1; }
+        .terminal-footer { background: #1f1f22; padding: 12px 24px; border-top: 1px dashed #3f3f46; display: flex; justify-content: space-between; align-items: center; }
+
+        .json-key { color: #38bdf8; } .json-string { color: #a3e635; } .json-number { color: #f472b6; } .comment { color: #71717a; font-style: italic; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 顶部开关 */
+        .mode-toggle { position: relative; width: 130px; height: 36px; background: #e2e8f0; border-radius: 20px; cursor: pointer; padding: 4px; display: flex; align-items: center; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); }
+        .mode-toggle::before { content: ''; position: absolute; width: 60px; height: 28px; background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        body.cli-mode .mode-toggle { background: #27272a; }
+        body.cli-mode .mode-toggle::before { background: #10b981; transform: translateX(62px); }
+        body.cli-mode .nav-bar { background: rgba(9, 9, 11, 0.9) !important; border-bottom-color: #27272a !important; }
+        body.cli-mode .nav-logo { color: #fff !important; }
+        
+        .mode-text { flex: 1; text-align: center; font-size: 12px; font-weight: bold; z-index: 1; transition: color 0.3s; user-select: none; }
+        .text-gui { color: #2563eb; } .text-cli { color: #94a3b8; }
+        body.cli-mode .text-gui { color: #52525b; } body.cli-mode .text-cli { color: #09090b; }
+
+        /* 差异化 VS 卡片 */
+        .vs-card { border-radius: 1.5rem; border: 1px solid #e2e8f0; background: white; display: flex; flex-direction: column; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.02); }
+        .vs-card:hover { box-shadow: 0 20px 40px -10px rgba(37,99,235,0.1); border-color: #bfdbfe; transform: translateY(-4px); }
+        .vs-top { background: #f8fafc; padding: 1.8rem; border-bottom: 1px dashed #cbd5e1; border-radius: 1.5rem 1.5rem 0 0; }
+        .vs-bottom { background: #ffffff; padding: 1.8rem; border-radius: 0 0 1.5rem 1.5rem; }
+        
+        /* 扫码体验悬浮窗 */
+        .qr-popup { position: absolute; top: 120%; left: 50%; transform: translateX(-50%); background: white; padding: 10px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); opacity: 0; pointer-events: none; transition: all 0.2s; border: 1px solid #e2e8f0; z-index: 100; }
+        .qr-trigger:hover .qr-popup { opacity: 1; top: 110%; pointer-events: auto; }
+    </style>
+</head>
+<body>
+
+    <!-- GUI 视觉底层 -->
+    <div class="gui-layer">
+        <div class="grid-bg"></div>
+        <div class="glow-point bg-blue-500/15" style="width: 50vw; height: 50vw; top: -10%; left: -10%;"></div>
+        <div class="glow-point bg-teal-400/10" style="width: 40vw; height: 40vw; top: 50%; right: -10%;"></div>
+    </div>
+
+    <!-- 导航栏 -->
+    <nav class="nav-bar fixed w-full z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/50 transition-colors duration-300">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="nav-logo font-extrabold text-2xl text-slate-900 tracking-tight transition-colors">好啦科技<span class="text-blue-600">.</span></div>
+            
+            <div class="flex items-center gap-6">
+                <!-- 导航直接放置体验入口 -->
+                <a href="#footer-contact" class="hidden md:flex text-sm font-bold text-slate-600 hover:text-blue-600 transition items-center gap-1">
+                    商务联系
+                </a>
+                
+                <div class="hidden md:block w-px h-4 bg-slate-300"></div>
+
+                <div class="flex items-center gap-3">
+                    <div class="hidden md:block text-[10px] font-bold text-slate-400 tracking-widest uppercase">架构视角:</div>
+                    <div class="mode-toggle" id="modeToggle">
+                        <span class="mode-text text-gui">GUI视觉</span>
+                        <span class="mode-text text-cli">Developer</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ========================================== -->
+    <!-- 视角 1：GUI 视觉模式 -->
+    <!-- ========================================== -->
+    <div class="gui-view">
+        <main class="pt-36 pb-16 px-6 max-w-5xl mx-auto text-center relative z-10">
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50/80 border border-blue-200 text-blue-700 text-xs font-bold mb-8 cursor-pointer hover:bg-blue-100 transition shadow-sm" onclick="openCmdK()">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                Cmd + K 唤醒大模型检索库
+            </div>
+            
+            <h1 class="text-5xl md:text-6xl font-extrabold text-slate-900 mb-6 tracking-tight leading-[1.15]">
+                用 AI 与数据，<br>
+                <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-teal-500">重构体检基础设施。</span>
+            </h1>
+            
+            <p class="text-lg text-slate-500 mb-10 max-w-2xl mx-auto leading-relaxed font-medium">
+                彻底告别千篇一律的死套餐与孤岛报告。<br>为企业与金融机构提供 <strong class="text-slate-800">智能定制、全网直连、标准数据交互</strong> 的下一代闭环。
+            </p>
+
+            <!-- 核心转化前置：第一屏双按钮 -->
+            <div class="flex justify-center items-center gap-4 mb-16 relative">
+                <!-- 体验入口 -->
+                <div class="relative qr-trigger cursor-pointer">
+                    <div class="bg-blue-600 text-white text-base font-bold px-8 py-3.5 rounded-full shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                        微信扫码体验管家
+                    </div>
+                    <!-- 悬浮弹出的二维码 -->
+                    <div class="qr-popup flex flex-col items-center">
+                        <div class="w-32 h-32 bg-slate-100 rounded-lg flex items-center justify-center text-xs text-slate-400 font-bold border border-slate-200 mb-2">小程序码占位</div>
+                        <span class="text-[10px] text-slate-500 font-bold">扫一扫立即定制方案</span>
+                    </div>
+                </div>
+                
+                <a href="#footer-contact" class="bg-white text-slate-700 border border-slate-200 text-base font-bold px-8 py-3.5 rounded-full hover:bg-slate-50 hover:border-slate-300 transition">
+                    联系我们
+                </a>
+            </div>
+
+            <!-- 数据背书 -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto mb-10">
+                <div class="glass-panel p-6 text-center">
+                    <div class="text-3xl font-black text-slate-800">3400<span class="text-xl text-blue-600">万+</span></div>
+                    <div class="text-xs text-slate-500 mt-2 font-bold tracking-wide uppercase">底层测评数据</div>
+                </div>
+                <div class="glass-panel p-6 text-center">
+                    <div class="text-3xl font-black text-slate-800">538<span class="text-xl text-teal-600">家</span></div>
+                    <div class="text-xs text-slate-500 mt-2 font-bold tracking-wide uppercase">直连优质门店</div>
+                </div>
+                <div class="glass-panel p-6 text-center">
+                    <div class="text-3xl font-black text-slate-800">241<span class="text-xl text-blue-600">城</span></div>
+                    <div class="text-xs text-slate-500 mt-2 font-bold tracking-wide uppercase">全国覆盖网络</div>
+                </div>
+                <div class="glass-panel p-6 text-center">
+                    <div class="text-3xl font-black text-slate-800">100<span class="text-xl text-teal-600">%</span></div>
+                    <div class="text-xs text-slate-500 mt-2 font-bold tracking-wide uppercase">结构化数据交付</div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 差异化重构 -->
+        <section class="py-24 border-t border-slate-200/50 bg-white/40">
+            <div class="max-w-6xl mx-auto px-6">
+                <h2 class="text-3xl font-bold text-slate-900 mb-16 text-center">告别中介模式，全链路重构体验</h2>
+                
+                <div class="grid md:grid-cols-3 gap-8">
+                    <!-- 环节 1：检前 -->
+                    <div class="vs-card">
+                        <div class="vs-top">
+                            <div class="inline-block px-2.5 py-1 bg-slate-200/60 text-slate-500 text-[10px] font-bold uppercase tracking-wider rounded mb-4">传统模式</div>
+                            <h4 class="text-sm font-bold text-slate-400 mb-2 line-through">固定死板套餐</h4>
+                            <p class="text-xs text-slate-400 leading-relaxed">提供几套基础组合，员工盲目选择，极易导致严重漏查或经费浪费。</p>
+                        </div>
+                        <div class="vs-bottom bg-blue-50/40 border-t-2 border-blue-400">
+                            <div class="inline-block px-2.5 py-1 bg-blue-100 text-blue-600 border border-blue-200 text-[10px] font-bold uppercase tracking-wider rounded mb-4">好啦科技赋能</div>
+                            <h4 class="text-lg font-bold text-blue-800 mb-2">检前：AI 千人千面定制</h4>
+                            <p class="text-sm text-slate-600 leading-relaxed">基于 3400 万数据的 AI 引擎。用户仅需 1 分钟即可完成画像，在预算内精准匹配专属检查项目。</p>
+                        </div>
+                    </div>
+
+                    <!-- 环节 2：检中 -->
+                    <div class="vs-card">
+                        <div class="vs-top">
+                            <div class="inline-block px-2.5 py-1 bg-slate-200/60 text-slate-500 text-[10px] font-bold uppercase tracking-wider rounded mb-4">传统模式</div>
+                            <h4 class="text-sm font-bold text-slate-400 mb-2 line-through">人工发单排期</h4>
+                            <p class="text-xs text-slate-400 leading-relaxed">覆盖网点有限，高度依赖人工表单与电话确认排期，极易出错且体验差。</p>
+                        </div>
+                        <div class="vs-bottom bg-teal-50/30 border-t-2 border-teal-400">
+                            <div class="inline-block px-2.5 py-1 bg-teal-100 text-teal-700 border border-teal-200 text-[10px] font-bold uppercase tracking-wider rounded mb-4">好啦科技赋能</div>
+                            <h4 class="text-lg font-bold text-teal-800 mb-2">检中：API 极速直连履约</h4>
+                            <p class="text-sm text-slate-600 leading-relaxed">深度打通 241 城、538 家优质门店 API。全自动化发单排期，并配备专属真人管家随时响应。</p>
+                        </div>
+                    </div>
+
+                    <!-- 环节 3：检后 -->
+                    <div class="vs-card">
+                        <div class="vs-top">
+                            <div class="inline-block px-2.5 py-1 bg-slate-200/60 text-slate-500 text-[10px] font-bold uppercase tracking-wider rounded mb-4">传统模式</div>
+                            <h4 class="text-sm font-bold text-slate-400 mb-2 line-through">冰冷的 PDF 报告</h4>
+                            <p class="text-xs text-slate-400 leading-relaxed">交付给保司或企业的是不可编辑解析的图片，数据彻底沦为死水孤岛。</p>
+                        </div>
+                        <div class="vs-bottom bg-indigo-50/30 border-t-2 border-indigo-400">
+                            <div class="inline-block px-2.5 py-1 bg-indigo-100 text-indigo-700 border border-indigo-200 text-[10px] font-bold uppercase tracking-wider rounded mb-4">好啦科技赋能</div>
+                            <h4 class="text-lg font-bold text-indigo-800 mb-2">检后：标准字典数据交付</h4>
+                            <p class="text-sm text-slate-600 leading-relaxed">自主 NLP 引擎将报告清洗为 100% 结构化 JSON 字典。直接对接到企业看板或保司预核保风控模型。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 合规与客户勋章墙 -->
+        <section class="py-24 border-t border-slate-200/50 bg-white">
+            <div class="max-w-6xl mx-auto px-6">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl font-bold text-slate-900">金融级合规底线与头部信赖</h2>
+                    <p class="text-slate-500 mt-4">每一项严苛的资质，都是让 B 端客户安心托付的基石。</p>
+                </div>
+
+                <div class="grid md:grid-cols-4 gap-6 mb-16 text-center">
+                    <div class="p-6 border border-slate-100 rounded-2xl bg-slate-50 hover:bg-white hover:shadow-lg transition">
+                        <div class="text-3xl mb-3">🔐</div>
+                        <h4 class="font-bold text-slate-800 mb-2">国家等保三级</h4>
+                        <p class="text-xs text-slate-500">非银机构最高安全标准</p>
+                    </div>
+                    <div class="p-6 border border-slate-100 rounded-2xl bg-slate-50 hover:bg-white hover:shadow-lg transition">
+                        <div class="text-3xl mb-3">📋</div>
+                        <h4 class="font-bold text-slate-800 mb-2">ISO 体系双认证</h4>
+                        <p class="text-xs text-slate-500">27001信息安全与9001质量</p>
+                    </div>
+                    <div class="p-6 border border-slate-100 rounded-2xl bg-slate-50 hover:bg-white hover:shadow-lg transition">
+                        <div class="text-3xl mb-3">🧬</div>
+                        <h4 class="font-bold text-slate-800 mb-2">精算与数据基因</h4>
+                        <p class="text-xs text-slate-500">深刻理解行业与底层数据逻辑</p>
+                    </div>
+                    <div class="p-6 border border-slate-100 rounded-2xl bg-slate-50 hover:bg-white hover:shadow-lg transition">
+                        <div class="text-3xl mb-3">🏆</div>
+                        <h4 class="font-bold text-slate-800 mb-2">40+ 知识产权</h4>
+                        <p class="text-xs text-slate-500">涵盖智能推荐系统等核心软著</p>
+                    </div>
+                </div>
+
+                <!-- 优化后的重量级客户勋章墙 -->
+                <div class="glass-panel p-12 text-center border-slate-200">
+                    <p class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-8">长期深度赋能数十家头部金融与大型机构</p>
+                    <div class="flex flex-wrap justify-center gap-x-4 gap-y-4">
+                        <div class="px-5 py-3 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 shadow-sm flex items-center gap-2"><span class="w-2 h-2 bg-blue-500 rounded-full"></span>国内 TOP3 寿险集团</div>
+                        <div class="px-5 py-3 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 shadow-sm flex items-center gap-2"><span class="w-2 h-2 bg-blue-500 rounded-full"></span>头部互联网保险平台</div>
+                        <div class="px-5 py-3 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 shadow-sm flex items-center gap-2"><span class="w-2 h-2 bg-blue-500 rounded-full"></span>大型国有财险公司</div>
+                        <div class="px-5 py-3 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 shadow-sm flex items-center gap-2"><span class="w-2 h-2 bg-blue-500 rounded-full"></span>知名合资人寿机构</div>
+                        <div class="px-5 py-3 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 shadow-sm flex items-center gap-2"><span class="w-2 h-2 bg-blue-500 rounded-full"></span>世界 500 强高科技企业</div>
+                        <div class="px-5 py-3 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 shadow-sm flex items-center gap-2"><span class="w-2 h-2 bg-blue-500 rounded-full"></span>全国性股份制商业银行</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 全新重构的专业级 Footer (左侧联系，右侧扫码体验) -->
+        <footer id="footer-contact" class="bg-slate-900 border-t border-slate-800 text-slate-300">
+            <div class="max-w-6xl mx-auto px-6 py-16 flex flex-col md:flex-row justify-between items-center md:items-stretch gap-12">
+                
+                <!-- 左侧：公司基本信息与联系方式 -->
+                <div class="flex-1 text-center md:text-left">
+                    <div class="font-extrabold text-2xl text-white tracking-tight mb-2">好啦科技<span class="text-blue-500">.</span></div>
+                    <div class="text-sm text-slate-400 mb-8 font-medium">AI驱动的数字化体检基础设施</div>
+                    
+                    <div class="space-y-4 text-sm">
+                        <div class="flex items-center justify-center md:justify-start gap-3">
+                            <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-blue-400">📞</div>
+                            <div>
+                                <div class="text-xs text-slate-500 uppercase">商务咨询专线</div>
+                                <div class="font-bold text-white text-lg">400-888-8888 <span class="text-xs font-normal text-slate-400">(示例)</span></div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-center md:justify-start gap-3">
+                            <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-blue-400">📧</div>
+                            <div>
+                                <div class="text-xs text-slate-500 uppercase">商务合作邮箱</div>
+                                <div class="font-medium text-slate-200">business@haola.com <span class="text-xs font-normal text-slate-400">(示例)</span></div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-center md:justify-start gap-3">
+                            <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-blue-400">📍</div>
+                            <div>
+                                <div class="text-xs text-slate-500 uppercase">总部地址</div>
+                                <div class="font-medium text-slate-200">北京市海淀区中关村创业大厦 9 层</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：微信扫码体验压轴 -->
+                <div class="flex flex-col items-center justify-center bg-slate-800/50 p-8 rounded-2xl border border-slate-700 w-full md:w-auto">
+                    <div class="text-blue-400 font-bold tracking-widest text-xs mb-3 uppercase">Experience Now</div>
+                    <div class="text-white font-bold mb-6">微信扫码体验 AI 管家</div>
+                    <div class="w-36 h-36 bg-white rounded-xl flex items-center justify-center p-2 mb-4 shadow-xl">
+                        <div class="w-full h-full border border-dashed border-slate-300 rounded-lg flex items-center justify-center text-slate-400 text-xs font-bold bg-slate-50">
+                            小程序码
+                        </div>
+                    </div>
+                    <div class="text-xs text-slate-500">手机扫一扫，获取您的专属定制方案</div>
+                </div>
+
+            </div>
+
+            <!-- 底栏版权 -->
+            <div class="border-t border-slate-800 py-6 text-center text-xs text-slate-500 flex flex-col md:flex-row justify-center items-center gap-2">
+                <p>© 2015-2024 北京好啦科技有限公司. 保留所有权利.</p>
+                <span class="hidden md:inline-block">|</span>
+                <p>京ICP备12345678号</p>
+            </div>
+        </footer>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- 视角 2：Developer & AI Console (面向极客与 Agent) -->
+    <!-- ========================================== -->
+    <div class="cli-view">
+        <div class="mb-10 text-center md:text-left">
+            <h2 class="text-3xl font-bold text-white mb-2">Developer & AI Console</h2>
+            <p class="text-sm text-zinc-400">为开发者、通用大模型及 AI Agent 提供的规范接口、认证机制与底层组件。</p>
+        </div>
+
+        <!-- 资产 0：对大模型爬虫至关重要的 OpenAPI 声明 -->
+        <div class="terminal-window border-blue-900/50 shadow-[0_0_30px_rgba(37,99,235,0.15)]">
+            <div class="terminal-header bg-blue-950/30">
+                <div class="terminal-dots"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+                [0] System / AI Agent Crawler Instructions
+            </div>
+            <div class="terminal-body">
+                <div class="cli-line comment"># 面向外部大模型（GPT/GLI）爬虫的标准接口声明</div>
+                <div class="cli-line">> cat /llms.txt</div>
+                <div class="cli-line" style="color: #cbd5e1;">Haola Digital Infrastructure exposes endpoints for Medical Network Queries, Custom Recommendations, and Data Parsing.</div>
+                <br>
+                <div class="cli-line comment"># 获取完整的 OpenAPI 3.0 规范用于 Agent 调用组装</div>
+                <div class="cli-line">> curl -O https://api.haola.com/openapi.json</div>
+                <div class="cli-line" style="color: #a3e635;">✔ OpenAPI spec downloaded. Core workflows mapped.</div>
+                <br>
+                <div class="cli-line comment"># 鉴权机制：采用标准的 Bearer Token</div>
+                <div class="cli-line">Authorization: Bearer <span style="color: #fbbf24;">HL_LIVE_****************</span></div>
+            </div>
+        </div>
+
+        <!-- 资产 1：体检网络 API -->
+        <div class="terminal-window">
+            <div class="terminal-header">
+                <div class="terminal-dots"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+                [1] Infrastructure / Medical Network API
+            </div>
+            <div class="terminal-body">
+                <div class="cli-line comment"># 获取实时体检门店与城市支持列表</div>
+                <div class="cli-line">> curl -X GET "https://api.haola.com/v1/network/status" -H "Authorization: Bearer $TOKEN"</div>
+                <br>
+                <div class="cli-line">{</div>
+                <div class="cli-line">  <span class="json-key">"status"</span>: <span class="json-string">"success"</span>,</div>
+                <div class="cli-line">  <span class="json-key">"data"</span>: { <span class="json-key">"cities"</span>: <span class="json-number">241</span>, <span class="json-key">"clinics"</span>: <span class="json-number">538</span> }</div>
+                <div class="cli-line">}</div>
+            </div>
+            <div class="terminal-footer">
+                <span class="text-xs text-zinc-500 font-mono">Status: Online</span>
+                <a href="#" class="text-xs font-bold text-blue-400 hover:text-blue-300 font-mono transition flex items-center gap-1 group">
+                    阅读完整 API 接入文档 
+                    <svg class="w-3 h-3 transform group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </a>
+            </div>
+        </div>
+
+        <!-- 资产 2：AI Agent Skill -->
+        <div class="terminal-window">
+            <div class="terminal-header">
+                <div class="terminal-dots"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+                [2] AI Ecosystem / Recommendation Skill
+            </div>
+            <div class="terminal-body">
+                <div class="cli-line comment"># 已在 Claw Hub / Coze 等平台上线的好啦“智能推荐”大模型原生插件</div>
+                <div class="cli-line">> import { HaolaSkill } from <span class="json-string">'@agent-hub/haola'</span>;</div>
+                <div class="cli-line">> agent.execute(<span class="json-string">"预算500元，员工平均35岁，推荐套餐"</span>)</div>
+                <div class="cli-line" style="color: #a3e635;">[Skill Activated] Fetched from 34M baseline data...</div>
+            </div>
+            <div class="terminal-footer">
+                <span class="text-xs text-zinc-500 font-mono">Platform: Claw Hub / Coze</span>
+                <a href="#" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 font-mono transition flex items-center gap-1 group">
+                    前往大模型插件市场安装 
+                    <svg class="w-3 h-3 transform group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </a>
+            </div>
+        </div>
+
+        <!-- 资产 3：龙虾通信 SDK -->
+        <div class="terminal-window">
+            <div class="terminal-header">
+                <div class="terminal-dots"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+                [3] Open Source / Lobster Communication SDK
+            </div>
+            <div class="terminal-body">
+                <div class="cli-line comment"># 开源的 Lobster SDK (龙虾通信)，提供底层高并发实时通信架构支撑</div>
+                <div class="cli-line">> npm install lobster-sdk</div>
+                <div class="cli-line" style="color: #a3e635;">[Info] Lobster A2A (Agent-to-Agent) protocol ready.</div>
+            </div>
+            <div class="terminal-footer">
+                <span class="text-xs text-zinc-500 font-mono">License: MIT Open Source</span>
+                <a href="#" class="text-xs font-bold text-zinc-300 hover:text-white font-mono transition flex items-center gap-1 group">
+                    View source on GitHub 
+                    <svg class="w-3 h-3 transform group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </a>
+            </div>
+        </div>
+
+        <div class="cli-line">> <span class="animate-pulse" style="color: #fff; font-weight: bold;">_</span></div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- 全局组件：Spotlight / Cmd+K 搜索终端 -->
+    <!-- ========================================== -->
+    <div class="cmdk-overlay" id="cmdkOverlay">
+        <div class="cmdk-modal flex flex-col">
+            <div class="flex items-center px-4 py-4 border-b border-slate-100 bg-white">
+                <svg class="w-5 h-5 text-blue-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                <input type="text" id="cmdkInput" class="flex-1 text-lg border-none outline-none text-slate-800 placeholder-slate-400" placeholder="检索好啦科技底层能力与业务...">
+                <kbd class="hidden md:inline-block text-[10px] text-slate-400 font-mono bg-slate-100 px-2 py-1 rounded">ESC</kbd>
+            </div>
+            
+            <div class="px-4 py-3 bg-slate-50 flex gap-2 border-b border-slate-100 overflow-x-auto">
+                <button onclick="simulateAiSearch('获取 OpenAPI 规范')" class="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1 rounded-full hover:text-blue-600 transition whitespace-nowrap shadow-sm">获取 OpenAPI 规范</button>
+                <button onclick="simulateAiSearch('业务差异化优势')" class="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1 rounded-full hover:text-blue-600 transition whitespace-nowrap shadow-sm">业务差异化优势</button>
+                <button onclick="simulateAiSearch('联系商务支持')" class="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1 rounded-full hover:text-blue-600 transition whitespace-nowrap shadow-sm">联系商务支持</button>
+            </div>
+
+            <div class="p-4 min-h-[120px] max-h-80 overflow-y-auto bg-white" id="cmdkOutput">
+                <div class="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">AI 知识库就绪</div>
+                <div class="text-sm text-slate-500 flex items-center gap-2">
+                    <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    您可以查询关于 API 规范、开源 SDK、Agent 插件或商务对接的信息。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 交互脚本 -->
+    <script>
+        // 1. 神之模式 (God Mode)
+        const modeToggle = document.getElementById('modeToggle');
+        modeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('cli-mode');
+        });
+
+        // 2. Cmd+K 全局指令
+        const cmdkOverlay = document.getElementById('cmdkOverlay');
+        const cmdkInput = document.getElementById('cmdkInput');
+        const cmdkOutput = document.getElementById('cmdkOutput');
+
+        function openCmdK() {
+            cmdkOverlay.classList.add('active');
+            setTimeout(() => cmdkInput.focus(), 50);
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeCmdK() {
+            cmdkOverlay.classList.remove('active');
+            document.body.style.overflow = 'auto';
+            cmdkInput.value = '';
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                cmdkOverlay.classList.contains('active') ? closeCmdK() : openCmdK();
+            }
+            if (e.key === 'Escape' && cmdkOverlay.classList.contains('active')) {
+                closeCmdK();
+            }
+        });
+
+        cmdkOverlay.addEventListener('click', (e) => {
+            if (e.target === cmdkOverlay) closeCmdK();
+        });
+
+        window.simulateAiSearch = function(query) {
+            cmdkInput.value = query;
+            processAiSearch(query);
+        };
+
+        cmdkInput.addEventListener('input', (e) => {
+            processAiSearch(e.target.value);
+        });
+
+        function processAiSearch(val) {
+            if(!val.trim()) {
+                cmdkOutput.innerHTML = `<div class="text-sm text-slate-500">等待输入...</div>`;
+                return;
+            }
+
+            cmdkOutput.innerHTML = `
+                <div class="flex items-center gap-2 text-sm text-blue-600 font-medium">
+                    <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    正在跨 GUI/API 模式检索...
+                </div>
+            `;
+
+            setTimeout(() => {
+                const lowerVal = val.toLowerCase();
+                let resultHtml = '';
+
+                if(lowerVal.includes('openapi') || lowerVal.includes('agent') || lowerVal.includes('爬虫')) {
+                    resultHtml = `
+                        <div class="text-slate-800 text-sm leading-relaxed">
+                            <strong class="text-blue-600 block mb-1">【Agent 爬虫与 OpenAPI 支持】</strong>
+                            我们完全支持通用大模型（LLM）生态。系统已配置 <code>/llms.txt</code> 供文本模型抓取，并提供完整的 <code>openapi.json</code> 供 Agent 组装调用请求。请切换至 Developer 模式查看鉴权（Bearer Token）说明。
+                        </div>`;
+                } else if(lowerVal.includes('联系') || lowerVal.includes('电话') || lowerVal.includes('商务')) {
+                    resultHtml = `
+                        <div class="text-slate-800 text-sm leading-relaxed">
+                            <strong class="text-blue-600 block mb-1">【联系商务团队】</strong>
+                            商务专线：<strong class="text-black">400-888-8888</strong><br>
+                            邮箱：business@haola.com<br>
+                            地址：北京市海淀区中关村创业大厦 9 层<br>
+                            建议关闭检索框，滚动至网页底部获取详细信息。
+                        </div>`;
+                } else if(lowerVal.includes('差异') || lowerVal.includes('优势')) {
+                    resultHtml = `
+                        <div class="text-slate-800 text-sm leading-relaxed">
+                            <strong class="text-blue-600 block mb-1">【好啦的核心壁垒】</strong>
+                            1. 检前：抛弃死套餐，基于 3400万数据的 AI 引擎千人千面定制。<br>
+                            2. 检中：不再人工排期，API 直连 538家 核心门店极速发单。<br>
+                            3. 检后：不交付 PDF，输出 100% 结构化 JSON 字典供企业风控。
+                        </div>`;
+                } else {
+                    resultHtml = `<div class="text-slate-500 text-sm italic">知识库已触达底层。强烈建议您通过页面顶部开关切换至 <strong>Developer 模式</strong>，查阅我们提供的 API 接口、Agent 插件及开源 SDK 资产库。</div>`;
+                }
+
+                cmdkOutput.innerHTML = `<div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100">${resultHtml}</div>`;
+            }, 350);
+        }
+    </script>
+</body>
+</html>

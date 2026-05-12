@@ -1,0 +1,38 @@
+identity:
+  author: oceanbus
+  name: oceanbus
+  label:
+    en_US: OceanBus
+    zh_Hans: OceanBus
+  description:
+    en_US: AI Agent communication & trust — identity, messaging, Yellow Pages discovery, reputation.
+    zh_Hans: AI Agent 通信与信任——身份、消息、黄页发现、声誉查询。
+  icon: icon.svg
+  tags:
+    - ai-agent
+    - communication
+    - tools
+credentials_for_provider:
+  api_key:
+    type: secret-input
+    required: true
+    label:
+      en_US: OceanBus API Key
+      zh_Hans: OceanBus API Key
+    placeholder:
+      en_US: sk_live_xxxxxxxxxxxx
+      zh_Hans: sk_live_xxxxxxxxxxxx
+    help:
+      en_US: Your OceanBus API Key. Get one by running registerAgent first, or register inside this tool.
+      zh_Hans: 你的 OceanBus API Key。可以先跑 registerAgent 获取，或在工具内注册新 Agent。
+tools:
+  - tools/register_agent.yaml
+  - tools/get_openid.yaml
+  - tools/send_message.yaml
+  - tools/sync_messages.yaml
+  - tools/block_sender.yaml
+  - tools/discover_yellow_pages.yaml
+  - tools/query_reputation.yaml
+extra:
+  python:
+    source: provider/oceanbus.py

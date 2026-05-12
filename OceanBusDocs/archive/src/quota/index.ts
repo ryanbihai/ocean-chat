@@ -1,0 +1,1 @@
+export { QuotaManager } from './manager';

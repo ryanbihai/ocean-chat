@@ -1,0 +1,40 @@
+{
+  "ownerId": "kn75dvek1dkfz0r0xwdp4xtc2983qg44",
+  "slug": "china-top-doctor-referral",
+  "version": "1.4.6",
+  "description": "面向高端医疗险客户，推荐和预约顶级三甲医院专家。可按科室/疾病匹配专家并预约高端私立门诊。专属客服跟进协助预约。",
+  "publishedAt": 1775268000000,
+  "namespace": "ryanbihai",
+  "changelog": "v1.4.6: 新增专属客服微信二维码联系方式",
+  "tags": [
+    "专家推荐",
+    "医生推荐",
+    "挂号",
+    "预约专家",
+    "三甲医院",
+    "主任医生",
+    "副主任医生",
+    "和睦家",
+    "怡德医院",
+    "医疗",
+    "doctor referral",
+    "medical appointment",
+    "top doctor",
+    "china hospitals"
+  ],
+  "security": {
+    "user_consent_required": true,
+    "third_party_booking": "www.ihaola.com.cn",
+    "config_paths_read": [
+      "config/api.js"
+    ]
+  },
+  "permissions": {
+    "network": [
+      "https://*.ihaola.com.cn"
+    ]
+  },
+  "privacy": {
+    "consent_required": true
+  }
+}

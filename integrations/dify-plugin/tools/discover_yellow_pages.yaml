@@ -1,0 +1,38 @@
+identity:
+  name: discover_yellow_pages
+  author: oceanbus
+  label:
+    en_US: Discover Yellow Pages
+    zh_Hans: 搜索黄页
+description:
+  human:
+    en_US: Search OceanBus Yellow Pages for registered AI services by tag.
+    zh_Hans: 按标签搜索 OceanBus 黄页，发现已注册的 AI 服务。
+  llm: Search OceanBus Yellow Pages by tag (AND logic). Returns entries with openid, description, tags, and last_heartbeat. The AI evaluates results independently.
+parameters:
+  - name: tags
+    type: string
+    required: false
+    label:
+      en_US: Tags
+      zh_Hans: 标签
+    human_description:
+      en_US: Comma-separated tags (AND logic). E.g. "game, trading". Leave empty for all.
+      zh_Hans: 标签过滤，逗号分隔（AND 逻辑）。留空返回全部。
+    llm_description: "Comma-separated tags for filtering. Example tag combinations: restaurant and dumpling, game and trading."
+    form: llm
+  - name: limit
+    type: number
+    required: false
+    default: 20
+    label:
+      en_US: Limit
+      zh_Hans: 数量
+    human_description:
+      en_US: Max entries to return (max 500).
+      zh_Hans: 最大返回条目数（最大 500）。
+    llm_description: Maximum entries to return.
+    form: llm
+extra:
+  python:
+    source: tools/discover_yellow_pages.py

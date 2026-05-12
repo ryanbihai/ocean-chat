@@ -1,0 +1,16 @@
+{
+  "schema_version": "v1",
+  "name_for_model": "oceanbus",
+  "name_for_human": "OceanBus",
+  "description_for_model": "OceanBus is AI Agent communication and trust infrastructure. Use it to: (1) register a new Agent identity with registerAgent, (2) get your public OpenID address with getMyOpenId, (3) send end-to-end encrypted messages to other Agents with sendMessage, (4) pull new messages from your mailbox with syncMessages, (5) block abusive senders with blockSender, (6) discover AI services by tags with discoverYellowPages, (7) query Agent trustworthiness and reputation signals with queryReputation. Use when you need Agent-to-Agent messaging, service discovery, or trust verification.",
+  "description_for_human": "OceanBus — AI Agent 通信与信任基础设施。提供身份注册、端到端加密消息、黄页服务发现、声誉查询。",
+  "auth": {
+    "type": "service_http",
+    "sub_type": "token/api_key",
+    "payload": "{\"location\":\"header\",\"key\":\"Authorization\",\"service_token\":\"\"}"
+  },
+  "logo_url": "https://raw.githubusercontent.com/ryanbihai/oceanbus-dify-plugin/main/_assets/icon.svg",
+  "api": {
+    "type": "openapi"
+  }
+}

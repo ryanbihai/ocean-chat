@@ -1,0 +1,47 @@
+identity:
+  author: cloudsway
+  name: cloudswayai_skyrouter_tool
+  label:
+    en_US: Cloudswayai Skyrouter Tool
+    zh_Hans: Cloudswayai Skyrouter 工具
+  description:
+    en_US: Skyrouter Image Generation and Editing
+    zh_Hans: Skyrouter 图像生成和编辑
+  icon: "icon.png"
+  tags:
+    - image
+    - productivity
+
+tools:
+  - tools/gpt_image_generate.yaml
+  - tools/gpt_image_edit.yaml
+
+extra:
+  python:
+    source: provider/skyrouter_tool.py
+
+credentials_for_provider:
+  skyrouter_endpoint:
+    help:
+      en_US: Please input your Skyrouter endpoint
+      zh_Hans: 请输入你的 Skyrouter endpoint
+    label:
+      en_US: Skyrouter endpoint
+      zh_Hans: Skyrouter endpoint
+    placeholder:
+      en_US: Please input your Skyrouter endpoint
+      zh_Hans: 请输入你的 Skyrouter endpoint
+    required: true
+    type: text-input
+  skyrouter_api_key:
+    help:
+      en_US: Please input your Skyrouter API key
+      zh_Hans: 请输入你的 Skyrouter API key
+    label:
+      en_US: Skyrouter API key
+      zh_Hans: Skyrouter API key
+    placeholder:
+      en_US: Please input your Skyrouter API key
+      zh_Hans: 请输入你的 Skyrouter API key
+    required: true
+    type: secret-input

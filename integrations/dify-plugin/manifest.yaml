@@ -1,0 +1,35 @@
+version: 0.0.2
+type: plugin
+author: oceanbus
+name: oceanbus
+label:
+  en_US: OceanBus
+  zh_Hans: OceanBus
+description:
+  en_US: "AI Agent communication and trust infrastructure — identity, encrypted messaging, Yellow Pages discovery, and reputation."
+  zh_Hans: "AI Agent 通信与信任基础设施——身份、加密消息、黄页发现、声誉查询。"
+icon: icon.svg
+created_at: "2026-05-05T10:00:00+08:00"
+resource:
+  memory: 134217728
+  permission:
+    tool:
+      enabled: true
+    endpoint:
+      enabled: true
+plugins:
+  tools:
+    - provider/oceanbus.yaml
+meta:
+  version: 0.0.2
+  arch:
+    - amd64
+    - arm64
+  runner:
+    language: python
+    version: "3.12"
+    entrypoint: main
+  minimum_dify_version: 0.0.2
+privacy: PRIVACY.md
+repo: https://github.com/ryanbihai/oceanbus-dify-plugin
+verified: false

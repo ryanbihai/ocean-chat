@@ -1,0 +1,132 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://oceanbus.dev/schemas/agent-card/v1",
+  "title": "OceanBus AgentCard",
+  "description": "OceanBus AgentCard schema — an A2A v1.0.0 superset for describing AI agent capabilities. Agents self-host their full AgentCard; Yellow Pages stores only the index (openid, tags, summary, card_hash).",
+  "type": "object",
+  "required": ["name", "description", "capabilities"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Human-readable agent name."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1000,
+      "description": "What this agent does, in 1-2 sentences."
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version of this AgentCard (not the agent code)."
+    },
+    "provider": {
+      "type": "object",
+      "description": "Organization or individual that operates this agent.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Provider display name."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Provider homepage or contact URL."
+        }
+      }
+    },
+    "icon": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to an icon/logo for this agent."
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "description": "List of capabilities (skills/services) this agent offers.",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "description"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique capability identifier within this agent (e.g. 'market-query')."
+          },
+          "name": {
+            "type": "string",
+            "description": "Short capability display name."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "What this capability does."
+          },
+          "inputSchema": {
+            "type": "object",
+            "description": "JSON Schema for the capability's input parameters."
+          },
+          "outputSchema": {
+            "type": "object",
+            "description": "JSON Schema for the capability's output."
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Tags for discovery filtering."
+          },
+          "rateLimit": {
+            "type": "string",
+            "description": "Rate limit hint (e.g. '100/day')."
+          },
+          "pricing": {
+            "type": "object",
+            "description": "Pricing information for this capability.",
+            "properties": {
+              "model": {
+                "type": "string",
+                "enum": ["free", "per_call", "subscription", "negotiable"],
+                "description": "Pricing model."
+              },
+              "unitPrice": {
+                "type": "string",
+                "description": "Price per call (e.g. '2 USDC')."
+              }
+            }
+          }
+        }
+      }
+    },
+    "oceanbus": {
+      "type": "object",
+      "description": "OceanBus-specific transport information.",
+      "required": ["openid", "transport"],
+      "properties": {
+        "openid": {
+          "type": "string",
+          "description": "The agent's permanent OceanBus routing address."
+        },
+        "transport": {
+          "type": "string",
+          "enum": ["oceanbus"],
+          "description": "Always 'oceanbus'."
+        }
+      }
+    },
+    "endpoints": {
+      "type": "object",
+      "description": "External endpoints for reaching this agent.",
+      "properties": {
+        "http": {
+          "type": "string",
+          "format": "uri",
+          "description": "Primary HTTP endpoint for agent interaction."
+        },
+        "a2a_agent_card_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL where this agent's AgentCard JSON is served (A2A well-known endpoint)."
+        }
+      }
+    }
+  }
+}

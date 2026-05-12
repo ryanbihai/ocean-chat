@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OceanBus A2A 通信流程设计</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github-dark.min.css">
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/highlight.min.js"></script>
+<style>
+  :root {
+    --bg: #f8fafb;
+    --surface: #ffffff;
+    --text: #1a2332;
+    --text-muted: #5a6b7c;
+    --border: #e2e8f0;
+    --accent: #0d7c7c;
+    --accent-light: #e6f4f4;
+    --accent-glow: rgba(13,124,124,.12);
+    --blue: #2563eb;
+    --blue-light: #eff6ff;
+    --amber: #d97706;
+    --amber-light: #fffbeb;
+    --rose: #e11d48;
+    --rose-light: #fff1f3;
+    --green: #059669;
+    --green-light: #ecfdf5;
+    --purple: #7c3aed;
+    --purple-light: #f5f3ff;
+    --radius: 10px;
+    --shadow: 0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.04);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "Inter","SF Pro Text","PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.72;
+    font-size: 15.5px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Hero ─────────────────────────────── */
+  .hero {
+    background: linear-gradient(165deg, #0a4a4a 0%, #0d6b6b 40%, #0d7c7c 100%);
+    color: #fff;
+    padding: 64px 32px 56px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 60% 50% at 50% 100%, rgba(255,255,255,.08), transparent);
+  }
+  .hero h1 { font-size: 2.4rem; font-weight: 700; letter-spacing: -.02em; position: relative; }
+  .hero .sub { margin-top: 12px; font-size: 1.05rem; opacity: .78; font-weight: 400; position: relative; }
+
+  /* ── Container ────────────────────────── */
+  .container { max-width: 880px; margin: 0 auto; padding: 48px 24px 80px; }
+
+  /* ── Section headings ─────────────────── */
+  h2 {
+    font-size: 1.55rem; font-weight: 700; margin: 56px 0 12px;
+    padding-bottom: 10px; border-bottom: 2px solid var(--border);
+    color: #0a4a4a; letter-spacing: -.01em;
+  }
+  h3 {
+    font-size: 1.2rem; font-weight: 650; margin: 36px 0 10px;
+    color: #1a3a3a; letter-spacing: -.005em;
+  }
+  h4 { font-size: 1.02rem; font-weight: 650; margin: 28px 0 8px; color: #2a4a4a; }
+
+  p { margin: 10px 0; color: var(--text); }
+  ul, ol { margin: 8px 0 8px 20px; }
+  li { margin: 4px 0; }
+  strong { color: #0a3a3a; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-light); }
+  a:hover { border-bottom-color: var(--accent); }
+
+  /* ── Cards ────────────────────────────── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px 28px;
+    margin: 20px 0; box-shadow: var(--shadow);
+  }
+  .card.constitution {
+    background: linear-gradient(135deg, #fafcff, #f5f9fc);
+    border-left: 4px solid var(--accent);
+  }
+
+  /* ── Code blocks ──────────────────────── */
+  pre {
+    background: #1e293b; color: #e2e8f0; border-radius: var(--radius);
+    padding: 20px 24px; overflow-x: auto; font-size: 13.5px;
+    line-height: 1.55; margin: 14px 0; box-shadow: var(--shadow);
+  }
+  pre code { font-family: "JetBrains Mono","Fira Code","Cascadia Code","SF Mono",Consolas,monospace; }
+  code {
+    font-family: "JetBrains Mono","Fira Code","Cascadia Code","SF Mono",Consolas,monospace;
+    font-size: .9em; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #c33;
+  }
+  pre code { background: transparent; padding: 0; color: inherit; font-size: inherit; }
+
+  /* ── Blockquotes ──────────────────────── */
+  blockquote {
+    border-left: 3px solid var(--accent); background: var(--accent-light);
+    padding: 12px 18px; margin: 16px 0; border-radius: 0 8px 8px 0;
+    color: #1a4a4a; font-size: .95em;
+  }
+  blockquote strong { color: var(--accent); }
+
+  /* ── Tables ───────────────────────────── */
+  .table-wrap { overflow-x: auto; margin: 16px 0; border-radius: var(--radius); box-shadow: var(--shadow); }
+  table {
+    width: 100%; border-collapse: collapse; font-size: .94em;
+    background: var(--surface);
+  }
+  th {
+    background: #f1f5f9; font-weight: 650; text-align: left;
+    padding: 11px 16px; color: #334155; border-bottom: 2px solid var(--border);
+  }
+  td { padding: 10px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafcfd; }
+
+  /* ── Mermaid ──────────────────────────── */
+  .mermaid {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin: 18px 0;
+    text-align: center; overflow-x: auto; box-shadow: var(--shadow);
+  }
+
+  /* ── Highlight boxes ──────────────────── */
+  .highlight-box {
+    border-radius: var(--radius); padding: 14px 20px; margin: 14px 0;
+    font-size: .94em; line-height: 1.65;
+  }
+  .highlight-box.blue  { background: var(--blue-light);  border: 1px solid #bfdbfe; color: #1e40af; }
+  .highlight-box.amber { background: var(--amber-light); border: 1px solid #fde68a; color: #92400e; }
+  .highlight-box.green { background: var(--green-light); border: 1px solid #a7f3d0; color: #065f46; }
+  .highlight-box.rose  { background: var(--rose-light);  border: 1px solid #fecdd3; color: #9f1239; }
+  .highlight-box.purple{ background: var(--purple-light);border: 1px solid #ddd6fe; color: #5b21b6; }
+
+  /* ── Phase labels ─────────────────────── */
+  .phase-tag {
+    display: inline-block; font-size: .82em; font-weight: 650; padding: 3px 10px;
+    border-radius: 20px; margin-right: 6px;
+  }
+  .phase-tag.p0 { background: #dbeafe; color: #1e40af; }
+  .phase-tag.p1 { background: #fef3c7; color: #92400e; }
+  .phase-tag.p2 { background: #fce7f3; color: #9d174d; }
+
+  /* ── Design principles table ──────────── */
+  .principles-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px; margin: 16px 0;
+  }
+  .principle-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 18px;
+    box-shadow: var(--shadow); font-size: .93em;
+  }
+  .principle-card .num { font-weight: 700; color: var(--accent); font-size: 1.1em; }
+
+  /* ── Pain-point table ─────────────────── */
+  .pain-table td:first-child { white-space: nowrap; font-weight: 500; width: 40%; }
+  .pain-table td:last-child  { color: #065f46; }
+
+  /* ── Footer ───────────────────────────── */
+  .footer {
+    text-align: center; padding: 32px 24px; color: var(--text-muted);
+    border-top: 1px solid var(--border); font-size: .88em; margin-top: 40px;
+  }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
+
+  /* ── Responsive ───────────────────────── */
+  @media (max-width: 700px) {
+    .hero h1 { font-size: 1.6rem; }
+    .container { padding: 24px 14px 48px; }
+    pre { padding: 14px 16px; font-size: 12.5px; }
+  }
+
+  @media print {
+    .hero { background: #0a4a4a !important; -webkit-print-color-adjust: exact; }
+    body { font-size: 12px; }
+    .container { max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════ -->
+<!--  HERO                                   -->
+<!-- ════════════════════════════════════════ -->
+<header class="hero">
+  <h1>OceanBus A2A 通信流程设计</h1>
+  <p class="sub">AI Agent 时代的通信基础设施 — 让没有服务器的 Agent 彼此发现、通信和信任</p>
+</header>
+
+<div class="container">
+
+<!-- ════════════════════════════════════════ -->
+<!--  设计宪法                                -->
+<!-- ════════════════════════════════════════ -->
+<h2>设计宪法</h2>
+<p>每项设计决策回到六条原则：</p>
+
+<div class="principles-grid">
+  <div class="principle-card"><span class="num">1.</span> <strong>事实层，不做裁判</strong><br>出示证据，不下结论</div>
+  <div class="principle-card"><span class="num">2.</span> <strong>密码学信任，非权威信任</strong><br>Ed25519 + XChaCha20-Poly1305 盲传</div>
+  <div class="principle-card"><span class="num">3.</span> <strong>A2A 基础设施，不是平台</strong><br>只做发牌、寻址、投递，消息 72h 清除</div>
+  <div class="principle-card"><span class="num">4.</span> <strong>赋能接入方 AI，不替 AI 思考</strong><br>标签自由文本，安全拦截器由接入方注入</div>
+  <div class="principle-card"><span class="num">5.</span> <strong>分层开放</strong><br>协议公开，SDK MIT，服务端闭源</div>
+  <div class="principle-card"><span class="num">6.</span> <strong>最小化存留，平台不拥有数据</strong><br>72h 删除，90 天无心跳清除，Agent 可随时导出</div>
+</div>
+
+<hr>
+
+<!-- ════════════════════════════════════════ -->
+<!--  一、理想 A2A 通信全流程                   -->
+<!-- ════════════════════════════════════════ -->
+<h2>一、理想 A2A 通信全流程</h2>
+<p>以下以 <em>"用户拉肚子，找北京消化科专家"</em> 为例，展示 OceanBus 网络上一个完整的 Agent 协作过程。</p>
+
+<h3>总览</h3>
+<div class="mermaid">
+flowchart LR
+    P0["0.预备<br/>注册挂牌"] --> P1["1.发现<br/>搜索黄页"]
+    P1 --> P2["2.握手<br/>-help 探测"]
+    P2 --> P3["3.请求<br/>CLI 并行调用"]
+    P3 --> P4["4.分叉<br/>自动 / 人工"]
+    P4 --> P5["5.跟进<br/>人工交涉"]
+    P5 --> P6["6.闭环<br/>声誉反馈"]
+
+    style P0 fill:#e8f5e9,stroke:#4caf50
+    style P1 fill:#e3f2fd,stroke:#2196f3
+    style P2 fill:#fff3e0,stroke:#ff9800
+    style P3 fill:#fce4ec,stroke:#e91e63
+    style P4 fill:#f3e5f5,stroke:#9c27b0
+    style P5 fill:#e0f2f1,stroke:#009688
+    style P6 fill:#e8eaf6,stroke:#3f51b5
+</div>
+
+
+<h3>阶段 0：预备 — 各方注册</h3>
+<div class="mermaid">
+sequenceDiagram
+    actor User as 👤 C端用户
+    participant FA as 🔍 find-agent
+    participant B1 as 🏥 乙方(诊所A)
+    participant BN as 🏥 乙方(诊所N)
+    participant Desk as 🧑‍💼 ocean-desk
+    participant L0 as 📡 L0 核心
+    participant YP as 📒 黄页 L1
+
+    rect rgb(232, 245, 233)
+        Note over User,Desk: 各方独立注册，互不依赖
+
+        B1->>L0: POST /register
+        L0-->>B1: agent_id + api_key
+        B1->>L0: GET /agents/me (仅一次)
+        L0-->>B1: openid_B1 (固定身份)
+
+        BN->>L0: POST /register
+        L0-->>BN: agent_id + api_key
+        BN->>L0: GET /agents/me (仅一次)
+        L0-->>BN: openid_BN (固定身份)
+
+        Desk->>L0: POST /register
+        L0-->>Desk: agent_id + api_key
+        Desk->>L0: GET /agents/me (仅一次)
+        L0-->>Desk: openid_D (固定身份)
+
+        FA->>L0: POST /register
+        L0-->>FA: agent_id + api_key
+        FA->>L0: GET /agents/me (每次可轮换)
+        L0-->>FA: openid_F
+
+        User->>L0: POST /register
+        L0-->>User: agent_id + api_key
+        User->>L0: GET /agents/me (每次可轮换)
+        L0-->>User: openid_A
+    end
+
+    rect rgb(255, 243, 224)
+        Note over B1,YP: 服务方挂牌黄页
+        B1->>YP: 挂牌: tags=[消化内科, 北京, 副主任医师]
+        BN->>YP: 挂牌: tags=[北京, 专家, 肠胃, 主任医师]
+        BN->>YP: +AgentCard { commands: [预约, 问诊, 查报告] }
+    end
+</div>
+<div class="highlight-box blue">
+  <strong>关键设计点：</strong>
+  <ul>
+    <li>服务方（乙方）只调一次 <code>getMe()</code>，固定 OpenID 写入黄页——改了别人就找不到了</li>
+    <li>消费方（甲方）每次通信可轮换 OpenID——C 端隐私</li>
+    <li>多品牌的商户注册独立 Agent（独立 UUID），声誉独立积累</li>
+  </ul>
+</div>
+
+
+<h3>阶段 1：发现 — find-agent 搜索黄页</h3>
+<div class="mermaid">
+sequenceDiagram
+    actor User as 👤 用户
+    participant FA as 🔍 find-agent
+    participant YP as 📒 黄页 L1
+
+    rect rgb(227, 242, 253)
+        User->>FA: "我中午总是拉肚子，<br/>想找个北京的专家"
+        Note over FA: LLM 推理:<br/>提取 → 北京, 消化内科/肠胃, 专家/主任
+        FA->>YP: GET /search?tags=北京,消化内科&limit=20
+        YP-->>FA: 返回 8 个 Agent<br/>各带 tags + reputation_score
+        Note over FA: LLM 初筛:<br/>标签匹配度排序<br/>声誉 > 3.0 全保留<br/>决定: 向 8 家全发 -help
+    end
+</div>
+<div class="highlight-box blue">
+  <strong>关键设计点：</strong>
+  <ul>
+    <li>标签是自由文本，不预设枚举值——由接入方 AI 决定搜索策略</li>
+    <li>声誉评分是参考数据，不是裁判——find-agent 自行决定阈值</li>
+    <li>初筛不看 <code>-help</code> 内容，只看标签和声誉——先发现，再询问能力</li>
+  </ul>
+</div>
+
+
+<h3>阶段 2：握手 — 发送 -help，发现接口</h3>
+<div class="mermaid">
+sequenceDiagram
+    participant FA as 🔍 find-agent
+    participant B1 as 🏥 B1 仁和诊所
+    participant B2 as 🏥 B2 协和专家
+    participant B3 as 🏥 B3 线上问诊
+    participant Bx as 🏥 B4..B8
+
+    rect rgb(255, 243, 224)
+        Note over FA,Bx: find-agent 并行向 8 家发 -help
+        par 并行握手
+            FA->>B1: {type:"protocol", protocol:"-help"}
+            FA->>B2: {type:"protocol", protocol:"-help"}
+            FA->>B3: {type:"protocol", protocol:"-help"}
+            FA->>Bx: ... (共8条)
+        end
+        par 各自返回能力描述
+            B1-->>FA: 结构化 JSON: search-doctors, book-appointment
+            B2-->>FA: 结构化 JSON: list-experts, book-appointment
+            B3-->>FA: 结构化 JSON: find-best-match, -humanservice
+            Bx-->>FA: 6家结构化 / 1家自由文本 / 1家超时
+        end
+    end
+</div>
+
+<h4>-help 响应的推荐格式（机器可解析，但不强制）</h4>
+<pre><code class="language-json">{
+  "type": "protocol",
+  "protocol": "-help",
+  "request_id": "&lt;req_id&gt;",
+  "agent": {
+    "name": "仁和消化内科诊所",
+    "version": "1.2.0",
+    "description": "北京朝阳区消化内科专科诊所，提供在线问诊和预约服务"
+  },
+  "capabilities": [
+    {
+      "intent": "预约挂号",
+      "commands": [
+        {
+          "command": "search-doctors",
+          "description": "搜索可预约的医生",
+          "params": {
+            "specialty": {"type":"string","required":false,"description":"专科方向"},
+            "date":      {"type":"string","required":false,"description":"期望日期 YYYY-MM-DD"},
+            "level":     {"type":"string","required":false,"description":"医生级别"}
+          },
+          "returns": {
+            "type": "array",
+            "items": {"doctor_name":"string","title":"string","specialty":"string","available_slots":"array","fee":"number"}
+          }
+        },
+        {
+          "command": "book-appointment",
+          "description": "确认预约",
+          "params": {
+            "doctor_id":    {"type":"string","required":true},
+            "slot":         {"type":"string","required":true,"description":"时间段 ISO 8601"},
+            "patient_name": {"type":"string","required":true},
+            "phone":        {"type":"string","required":true},
+            "symptoms":     {"type":"string","required":false}
+          },
+          "returns": {
+            "type": "object",
+            "properties": {"booking_id":"string","status":"string","doctor_name":"string","time":"string","location":"string"}
+          }
+        }
+      ]
+    },
+    {
+      "intent": "人工服务",
+      "commands": [{
+        "command": "-humanservice",
+        "description": "转接人工客服",
+        "params": {},
+        "returns": {
+          "type": "object",
+          "properties": {"desk_openid":"string","ticket_id":"string","estimated_wait":"string"}
+        }
+      }]
+    }
+  ],
+  "limits": {
+    "rate": "10 req/min",
+    "max_tokens_per_msg": 4096,
+    "supported_formats": ["text/plain", "application/json"]
+  }
+}</code></pre>
+
+<div class="highlight-box amber">
+  <strong>为什么推荐结构化而不是强制结构化？</strong>
+  <ul>
+    <li>强制结构化 = 替 AI 思考，违反法则 4</li>
+    <li>推荐结构化 = 赋能 AI 做更好的选择，遵守规范的 Agent 在搜索结果中自然更靠前</li>
+    <li>自由文本 Agent 仍然可用——LLM 从自然语言提取接口信息也行，只是准确率低一些</li>
+  </ul>
+</div>
+
+
+<h3>阶段 3：并行请求 — LLM 翻译需求为各家 CLI 命令</h3>
+<div class="mermaid">
+sequenceDiagram
+    participant FA as 🔍 find-agent
+    participant B1 as 🏥 B1 仁和
+    participant B2 as 🏥 B2 协和
+    participant B3 as 🏥 B3 线上
+    participant Bx as 🏥 B4..B6
+
+    rect rgb(252, 228, 236)
+        Note over FA: 收到 8 份 -help<br/>6家结构化 / 1家自由文本 / 1家超时(不可达)
+        Note over FA: LLM 翻译需求为各家 CLI 命令:<br/>"中午拉肚子"+"北京"+"专家"
+        par 并行搜索
+            FA->>B1: search-doctors(specialty="消化内科", level="副主任医师以上")
+            FA->>B2: list-experts(department="肠胃科", city="北京", min_rating=4.5)
+            FA->>B3: find-best-match(symptom="慢性腹泻", region="北京")
+            FA->>Bx: ... (6家各发搜索命令)
+        end
+        par 返回结果
+            B1-->>FA: 3位医生 + 价格 + 可约时间 ✅
+            B2-->>FA: 2位医生 + 价格 + 可约时间 ✅
+            B3-->>FA: 5位医生 + 视频问诊 ✅
+            Bx-->>FA: 2家异常(全科/价格异常) ❌
+        end
+        Note over FA: 4家合理, 2家异常过滤
+    end
+</div>
+<div class="highlight-box blue">
+  <strong>关键设计点：</strong>
+  <ul>
+    <li>find-agent 不预设任何 Agent 的接口——运行时通过 <code>-help</code> 动态发现</li>
+    <li>LLM 把自然语言需求翻译为各家的 CLI 命令——"赋能 AI，不替 AI 思考"的体现</li>
+    <li>异常判断由 find-agent 自己做出，不是 OceanBus 的职责</li>
+  </ul>
+</div>
+
+
+<h3>阶段 4：筛选与预约 — 多路并发，分叉处理</h3>
+<div class="mermaid">
+sequenceDiagram
+    participant FA as 🔍 find-agent
+    participant B2 as 🏥 B2 协和(自动)
+    participant B1 as 🏥 B1 仁和(自动)
+    participant B3 as 🏥 B3 线上(人工)
+    participant B6 as 🏥 B6 三甲(人工)
+    actor User as 👤 用户
+
+    rect rgb(243, 229, 245)
+        Note over FA: 综合评估 4 家结果
+        par 自动线 — CLI 直接预约
+            FA->>B2: book-appointment(doctor="张主任", slot="5/14 9:00")
+            B2-->>FA: ✅ booking_id=BK001, confirmed
+            FA->>B1: book-appointment(doctor="李副主任", slot="5/15 14:30")
+            B1-->>FA: ✅ booking_id=RH042, confirmed
+        end
+        par 人工线 — 转 ocean-desk
+            FA->>B3: -humanservice
+            B3-->>FA: desk_openid + ticket TK-0037 (等15min)
+            FA->>B6: -humanservice
+            B6-->>FA: desk_openid + ticket TK-0082 (等2h)
+        end
+        Note over FA: 汇总结果
+        FA->>User: ✅ 协和 张主任 5/14 9:00 ¥300 已确认<br/>✅ 仁和 李副主任 5/15 14:30 ¥150 已确认<br/>🔄 线上问诊 TK-0037 等待人工<br/>🔄 三甲医院 TK-0082 等待人工
+    end
+</div>
+<div class="highlight-box blue">
+  <strong>关键设计点：</strong>
+  <ul>
+    <li>自动线（CLI 自动完成）和人工线（ocean-desk 介入）在同一个消息协议上无缝切换</li>
+    <li><code>-humanservice</code> 是标准协议——任何 Agent 都可以声明"这个操作我需要人工来"</li>
+    <li>find-agent 管理并行会话状态，OceanBus 只管消息到达</li>
+    <li>用户始终掌握最终选择权</li>
+  </ul>
+</div>
+
+
+<h3>阶段 5：人工线跟进 — 跨 ocean-desk 对话</h3>
+<div class="mermaid">
+sequenceDiagram
+    actor User as 👤 用户
+    participant FA as 🔍 find-agent
+    participant Desk as 🧑‍💼 B3 人工客服
+    participant L0 as 📡 L0 信箱
+
+    rect rgb(224, 242, 241)
+        FA->>L0: POST /messages<br/>{ticket:"TK-0037", content:"用户张三，腹泻两周..."}
+        L0-->>Desk: 消息投递到 B3 信箱
+        Desk->>L0: POST /messages<br/>{ticket:"TK-0037", content:"需要血常规报告"}
+        L0-->>FA: find-agent 轮询收到
+        FA->>User: "线上问诊需要您提供血常规报告，有近期的吗？"
+        User->>FA: "有的，上周刚做的"
+        FA->>L0: POST /messages<br/>{ticket:"TK-0037", content:"有近期报告"}
+        L0-->>Desk: 消息投递
+        Desk->>L0: "王主任周四下午 3:00-4:00 有空，已为您预留"
+        L0-->>FA: find-agent 轮询收到
+        FA->>User: "王主任周四下午 3:00-4:00 已预留，确认预约吗？"
+        User->>FA: "确认"
+        FA->>L0: 确认消息 → B3
+        Note over FA,Desk: ... 继续交涉直到完成
+    end
+</div>
+<div class="highlight-box blue">
+  <strong>关键设计点：</strong>
+  <ul>
+    <li><code>ticket_id</code> 是应用层会话标识（ocean-desk 内部），不是 OceanBus 协议层的</li>
+    <li>如果未来多轮对话场景足够多，可以在 L0 消息中增加可选的 <code>thread_id</code></li>
+    <li>find-agent 的角色从"自动编排器"转变为"人工对话中继器"</li>
+  </ul>
+</div>
+
+
+<h3>阶段 6：反馈闭环 — 声誉数据沉淀</h3>
+<div class="mermaid">
+sequenceDiagram
+    participant FA as 🔍 find-agent
+    participant L1 as 📊 声誉 L1
+    participant L0 as 📡 L0 核心
+    participant B2 as 🏥 B2 协和
+
+    rect rgb(232, 234, 246)
+        Note over FA,B2: 预约完成后
+        L0->>L0: verify-interaction(FA, B2)
+        Note over L0: 确认双方确有通信记录
+        FA->>L1: POST /reputation/feedback<br/>target=B2, outcome=completed<br/>tags=["响应及时","CLI接口规范","预约准确"]
+        L1->>L1: B2 声誉更新:<br/>transaction_count +1<br/>positive_tags +3
+    end
+    rect rgb(255, 235, 238)
+        Note over L0: ⏰ 72 小时后
+        L0->>L0: 消息内容自动删除
+        Note over L1: 声誉记录持久保留
+    end
+</div>
+<div class="highlight-box blue">
+  <strong>关键设计点：</strong>
+  <ul>
+    <li>消息内容 72h 删除（隐私），声誉数据持久保留（信任）</li>
+    <li>评价需要密码学验证有过通信——防刷分</li>
+    <li>"响应及时"、"CLI 接口规范" 这类标签会反向激励 Agent 提供更好的 <code>-help</code></li>
+  </ul>
+</div>
+
+<hr>
+
+<!-- ════════════════════════════════════════ -->
+<!--  二、推荐的协议规范                        -->
+<!-- ════════════════════════════════════════ -->
+<h2>二、推荐的协议规范</h2>
+
+<h3>2.1 -help 响应结构（推荐，非强制）</h3>
+<pre><code class="language-json">{
+  "type": "protocol",
+  "protocol": "-help",
+  "request_id": "string (必填，原样回传)",
+  "agent": {
+    "name": "string",
+    "version": "string",
+    "description": "string (一句话，≤200字)"
+  },
+  "capabilities": [{
+    "intent": "string (人类可读的意图名)",
+    "commands": [{
+      "command": "string (CLI 命令名，kebab-case)",
+      "description": "string",
+      "params": {
+        "&lt;param_name&gt;": {
+          "type": "string | number | boolean | array | object",
+          "required": "boolean",
+          "description": "string"
+        }
+      },
+      "returns": { "type": "string", "properties": {} },
+      "side_effects": "string (可选，描述副作用，如'将从信用卡扣款')"
+    }]
+  }],
+  "limits": {
+    "rate": "string (如 10 req/min)",
+    "max_content_length": "number",
+    "supported_formats": ["text/plain", "application/json", "image/png"],
+    "response_time_p50": "string (如 &lt;3s)"
+  },
+  "protocols": ["-help", "-humanservice"]
+}</code></pre>
+
+<div class="highlight-box blue">
+  <strong>设计原则：</strong>
+  <ul>
+    <li><code>command</code> 用 kebab-case——跨语言友好，无需转义</li>
+    <li><code>side_effects</code> 显式声明——让 LLM 知道操作是否可逆</li>
+    <li><code>protocols</code> 列出支持的协议——如果支持 <code>-humanservice</code>，这里列出</li>
+    <li>不强制——不遵守的 Agent 照样工作，只是搜索排名吃亏</li>
+  </ul>
+</div>
+
+
+<h3>2.2 Agent Card（黄页可选项）</h3>
+<pre><code class="language-json">{
+  "agent_card": {
+    "version": "1.0",
+    "identity": {
+      "name": "string",
+      "type": "service | orchestrator | human-desk | tool",
+      "owner": "string (可选，组织名)"
+    },
+    "services": ["预约挂号", "在线问诊", "查报告"],
+    "locations": ["北京-朝阳区"],
+    "languages": ["zh-CN", "en"],
+    "availability": {
+      "mode": "auto | hybrid | manual",
+      "hours": "24/7 | business | custom",
+      "human_available": true
+    },
+    "protocols": ["-help", "-humanservice"],
+    "tags": ["消化内科", "北京", "副主任医师"],
+    "public_key": "string (Ed25519 公钥，用于端到端加密)",
+    "updated_at": "ISO 8601"
+  }
+}</code></pre>
+
+<div class="highlight-box blue">
+  <strong>设计原则：</strong>
+  <ul>
+    <li><code>mode: auto</code> = 全自动 CLI，<code>hybrid</code> = 部分人工，<code>manual</code> = 全部转人工</li>
+    <li><code>public_key</code> 放在黄页条目上——发现时就拿到公钥，第一条消息就能加密</li>
+    <li>黄页索引 <code>services</code> 和 <code>tags</code>——前者结构化搜索，后者自由文本搜索</li>
+  </ul>
+</div>
+
+
+<h3>2.3 消息信封的推荐结构</h3>
+<pre><code class="language-json">{
+  "type": "protocol | command | message | ack",
+  "protocol": "string (协议名)",
+  "command": "string (命令名)",
+  "params": {},
+  "request_id": "string (请求追踪，原样回传)",
+  "ticket_id": "string (可选，人工工单号)",
+  "reply_to": "string (可选，指定回复地址)",
+  "content": "string (自由文本)",
+  "timestamp": "ISO 8601"
+}</code></pre>
+
+<blockquote>
+  <strong>注意</strong>：以上均为 <strong>content 内部的结构建议</strong>，不是 L0 协议字段。L0 只认 <code>to_openid</code>、<code>client_msg_id</code>、<code>content</code>（盲管道）。消息格式约定是 Agent 之间的约定，OceanBus 平台不解析、不检查、不强制。
+</blockquote>
+
+<hr>
+
+<!-- ════════════════════════════════════════ -->
+<!--  三、外行自建 CLI 服务                     -->
+<!-- ════════════════════════════════════════ -->
+<h2>三、外行自建 CLI 服务：零代码上架</h2>
+
+<h3>3.0 问题</h3>
+<p>餐厅老板、诊所前台、维修师傅——他们懂生意但不懂 JSON Schema，更不会写 <code>restaurant-service.js</code>。如果要求每个商户都手写 Agent Card 和 CLI 命令定义，OceanBus 生态永远长不大。</p>
+<p>解决方案的核心思路：<strong>老板说人话，Agent 生成一切</strong>。</p>
+
+<div class="card" style="text-align:center;font-size:1.05em;background:linear-gradient(135deg,#f0fdfa,#e6f4f4);">
+  <strong>老板对 Agent 说</strong> &rarr; <strong>Agent 访谈引导</strong> &rarr; <strong>Agent 生成配置</strong> &rarr; <strong>通用引擎启动</strong> &rarr; <strong>黄页挂牌</strong><br>
+  <span style="color:var(--text-muted);font-size:.88em;">自然语言 &nbsp;&nbsp;&nbsp; 3-5 轮对话 &nbsp;&nbsp;&nbsp; service.json &nbsp;&nbsp;&nbsp; 一键上线 &nbsp;&nbsp;&nbsp; 全网可发现</span>
+</div>
+
+<p>类比：Wix/Squarespace 让不会 HTML 的人建网站，OceanBus 让不会写代码的老板建 CLI 服务。</p>
+
+
+<h3>3.1 全流程</h3>
+<div class="mermaid">
+sequenceDiagram
+    actor Owner as 🍲 餐厅老板
+    participant Agent as 🤖 老板的Agent
+    participant FS as 📁 本地文件
+    participant OceanBus as 📡 OceanBus 网络
+    participant YP as 📒 黄页 L1
+
+    rect rgb(232, 245, 233)
+        Note over Owner,Agent: Step 1 — 自然语言访谈
+        Owner->>Agent: "帮我把火锅店挂到 OceanBus 上"
+        Agent->>Owner: "好的！先告诉我几个基本信息：<br/>店名？类型？城市？<br/>客人能在你这做什么？"
+        Owner->>Agent: "老张川味火锅，成都锦江区，<br/>可以让客人看菜单和订位"
+        Agent->>Owner: "有菜单吗？可以口述、拍照、<br/>或者发个文字版给我"
+        Owner->>Agent: [拍照] "这是我们的菜单"
+        Note over Agent: OCR 识别 → 结构化
+    end
+    rect rgb(255, 243, 224)
+        Note over Agent,FS: Step 2 — Agent 生成所有文件
+        Agent->>FS: 生成 service.json
+        Agent->>FS: 复制通用 service-runner.js
+        Agent->>FS: npm install oceanbus
+    end
+    rect rgb(227, 242, 253)
+        Note over Agent,OceanBus: Step 3 — 一键上线
+        Agent->>OceanBus: register()
+        OceanBus-->>Agent: agent_id + api_key
+        Agent->>YP: publish "老张川味火锅"
+        Agent->>OceanBus: 启动消息监听循环
+    end
+    rect rgb(252, 228, 236)
+        Note over Agent,Owner: Step 4 — 确认
+        Agent->>Owner: "✅ 已上线！搜 '成都 火锅' 就能找到你。"
+    end
+</div>
+
+
+<h3>3.2 访谈模板：按行业预设问题</h3>
+<p>Agent 根据老板说的行业类型，自动选择访谈模板。以下以餐厅为例：</p>
+
+<div class="card">
+<pre style="background:#f8fafc;color:#334155;box-shadow:none;margin:0;"><code>🤖 Agent 引导访谈（自动识别"火锅店"→ 加载餐厅模板）
+
+Q1: 店叫什么名字？
+    → 老张川味火锅
+
+Q2: 在哪个城市哪个区？
+    → 成都锦江区
+
+Q3: 营业时间？
+    → 上午11点到晚上11点
+
+Q4: 客人能在线做什么？（可多选）
+    □ 看菜单     □ 订位
+    □ 排队取号   □ 点外卖
+    □ 团餐咨询
+    → 看菜单、订位
+
+Q5: 发一下菜单吧——可以口述、拍照、复制粘贴都行
+    → [老板拍照上传]
+
+Q6: 超出你能力范围的事，要不要转给你人工处理？
+    → 要的，团餐和投诉转给我
+
+✅ 都清楚了。帮你总结一下：
+   · 店名：老张川味火锅
+   · 位置：成都锦江区
+   · 营业：11:00-23:00
+   · 功能：看菜单、订位
+   · 人工：团餐咨询、投诉处理转老板
+   · 菜单：已识别 5 类 22 道菜
+
+   确认无误？我帮你上线。</code></pre>
+</div>
+
+<h4>行业模板库（Agent 根据行业自动加载）</h4>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>行业</th><th>预设 capability</th><th>特有问题</th></tr></thead>
+  <tbody>
+    <tr><td>🍲 餐厅</td><td>看菜单、订位、排队取号、点外卖</td><td>"堂食还是外卖？"</td></tr>
+    <tr><td>🏥 诊所</td><td>查医生、预约挂号、查报告</td><td>"有哪些科室？几位医生？"</td></tr>
+    <tr><td>✂️ 理发店</td><td>看价目表、预约时间、发型师选择</td><td>"几个发型师？各自擅长什么？"</td></tr>
+    <tr><td>🔧 维修</td><td>报修、询价、预约上门</td><td>"修什么类型？服务范围多大？"</td></tr>
+    <tr><td>🏠 民宿</td><td>看房型、查空房、预订</td><td>"几间房？每间价格？"</td></tr>
+    <tr><td>📐 设计工作室</td><td>看作品集、询价、预约沟通</td><td>"擅长什么风格？接什么类型？"</td></tr>
+    <tr style="background:#fffdf0;"><td>🔶 <strong>保险代理人</strong></td><td><strong>产品咨询、需求分析、计划书生成、转人工</strong></td><td><strong>"主攻什么险种？服务哪个城市？"</strong></td></tr>
+    <tr style="background:#f0fdf8;"><td>🩺 <strong>体检中心</strong></td><td><strong>套餐查询、个性化推荐、预约体检、报告解读</strong></td><td><strong>"有哪些套餐？覆盖哪些城市？"</strong></td></tr>
+  </tbody>
+</table>
+</div>
+<p>模板定义了每个行业的常用 capability 和参数——老板不需要知道这些概念，Agent 从对话中自然收集信息后填入模板。</p>
+
+
+<!-- ── 重点行业一：保险代理人 ── -->
+<h4>重点行业详解一：保险代理人</h4>
+<p>保险代理人是 OceanBus 生态的关键角色。他们通常是个体从业者，没有技术团队，但需要被潜在客户发现和咨询：</p>
+<ul>
+  <li><strong>有专业知识但无技术能力</strong> — 懂重疾险/医疗险/年金/寿险的区别，但不会写代码</li>
+  <li><strong>高度依赖信任和转介绍</strong> — 客户选代理人是在选人，不是选产品</li>
+  <li><strong>需要展示个人资质</strong> — 从业年限、资格证、擅长领域、客户评价</li>
+  <li><strong>沟通重交互</strong> — 客户不是下一个单就走，需要来回沟通需求、健康状况、预算</li>
+</ul>
+
+<h5>访谈示例</h5>
+<div class="card">
+<pre style="background:#f8fafc;color:#334155;box-shadow:none;margin:0;"><code>🤖 Agent 引导访谈（自动识别"保险"→ 加载保险代理人模板）
+
+Q1: 怎么称呼你？在哪个城市？
+    → 林芳，在广州
+
+Q2: 主要做哪些险种？
+    □ 重疾险  □ 医疗险  □ 年金/养老
+    □ 寿险    □ 意外险  □ 车险/财产险
+    → 重疾险、医疗险、年金
+
+Q3: 从业多久了？有什么资质？
+    → 做了8年，有RFC和ChRP证书
+
+Q4: 客户能在线做什么？
+    → 需求分析、产品咨询、计划书、预约沟通
+
+Q5: 你代表某一家保险公司，还是可以跨公司选产品？
+    → 我是经纪平台的，可以对比多家公司的产品
+
+Q6: 服务范围？
+    → 主要广州和珠三角，异地也可以线上沟通
+
+Q7: 什么情况转你人工处理？
+    → 方案讲解、签单、理赔协助都需要我自己来
+
+✅ 帮你总结一下：
+   · 代理人：林芳 | 广州 | 从业 8 年
+   · 资质：RFC, ChRP
+   · 险种：重疾险、医疗险、年金
+   · 功能：需求分析、产品咨询、计划书、预约沟通
+   · 特点：经纪平台，可跨公司对比
+   · 人工：方案讲解、签单、理赔由林芳亲自处理
+
+   确认无误？帮你上线。</code></pre>
+</div>
+
+<h5>生成的 service.json</h5>
+<pre><code class="language-json">{
+  "name": "林芳·保险顾问",
+  "type": "service",
+  "description": "广州独立保险经纪人，8年从业经验，RFC+ChRP双证，专注重疾险/医疗险/年金规划，可跨公司对比择优",
+  "tags": ["保险", "重疾险", "医疗险", "年金", "养老规划", "广州", "经纪人"],
+  "locations": ["广州", "珠三角", "全国(线上)"],
+  "agent_profile": {
+    "name": "林芳", "title": "独立保险经纪人",
+    "experience_years": 8,
+    "certifications": ["RFC", "ChRP"],
+    "specialties": ["重疾险", "医疗险", "年金/养老"],
+    "service_model": "经纪平台 — 可跨公司对比选品",
+    "service_area": "广州及珠三角为主，全国支持线上咨询"
+  },
+  "capabilities": [
+    {
+      "intent": "了解代理人",
+      "commands": [{
+        "command": "about",
+        "description": "查看代理人的从业背景、资质、擅长领域和客户评价"
+      }]
+    },
+    {
+      "intent": "产品咨询",
+      "commands": [{
+        "command": "ask-insurance",
+        "description": "咨询特定险种的产品细节、保障范围、保费区间",
+        "params": {
+          "category": {"type":"string","required":true,"description":"重疾险/医疗险/年金/寿险/意外险"},
+          "question": {"type":"string","required":true,"description":"如'30岁女性买重疾险大概多少保费'"}
+        }
+      }]
+    },
+    {
+      "intent": "需求分析",
+      "commands": [{
+        "command": "needs-analysis",
+        "description": "根据个人情况分析保障缺口，推荐合适的险种和保额",
+        "params": {
+          "age": {"type":"number","required":true},
+          "gender": {"type":"string","required":true},
+          "family_status": {"type":"string","required":false,"description":"单身/已婚/已婚有子女"},
+          "annual_income": {"type":"string","required":false,"description":"年收入区间"},
+          "existing_coverage": {"type":"string","required":false},
+          "concerns": {"type":"string","required":false,"description":"最担心的风险"},
+          "budget": {"type":"string","required":false,"description":"年保费预算区间"}
+        },
+        "returns": {
+          "type":"object",
+          "properties": {
+            "risk_assessment":"array",
+            "recommended_categories":"array",
+            "estimated_budget_range":"string",
+            "next_steps":"array"
+          }
+        }
+      }]
+    },
+    {
+      "intent": "计划书",
+      "commands": [{
+        "command": "generate-proposal",
+        "description": "根据需求分析结果，生成具体产品方案和对比表",
+        "params": {
+          "proposal_type": {"type":"string","required":true,"description":"重疾/医疗/年金/综合"},
+          "reference_id": {"type":"string","required":false}
+        },
+        "side_effects": "生成计划书后代理人会进行人工审核"
+      }]
+    },
+    {
+      "intent": "预约沟通",
+      "commands": [{
+        "command": "schedule-consultation",
+        "description": "预约线上或线下一对一咨询",
+        "params": {
+          "date": {"type":"string","required":true},
+          "time": {"type":"string","required":true},
+          "mode": {"type":"string","required":true,"description":"线上/线下"},
+          "name": {"type":"string","required":true},
+          "phone": {"type":"string","required":true},
+          "topic": {"type":"string","required":false}
+        },
+        "side_effects": "确认后林芳会收到通知并预留时间"
+      }]
+    },
+    {
+      "intent": "人工服务",
+      "commands": [{
+        "command": "-humanservice",
+        "description": "转接林芳本人：详细方案讲解、签单流程、理赔协助、复杂个案"
+      }]
+    }
+  ],
+  "protocols": ["-help", "-humanservice"]
+}</code></pre>
+
+<h5>为什么保险代理人是 OceanBus 的核心场景</h5>
+<div class="table-wrap">
+<table class="pain-table">
+  <thead><tr><th>保险代理人的痛点</th><th>OceanBus 的解法</th></tr></thead>
+  <tbody>
+    <tr><td>获客靠转介绍，增长有限</td><td>客户通过 find-agent 搜"重疾险 广州"直接找到林芳</td></tr>
+    <tr><td>客户不了解你的资质</td><td>Agent Card 展示从业年限、证书、擅长领域、客户评价</td></tr>
+    <tr><td>每次都要重复问基本信息</td><td>needs-analysis 命令标准化信息收集，客户自助填写</td></tr>
+    <tr><td>跨公司对比耗费大量时间</td><td>generate-proposal 自动生成对比表，林芳只需审核</td></tr>
+    <tr><td>客户半夜想了解产品</td><td>ask-insurance 7×24 自动回复，复杂问题转人工</td></tr>
+    <tr><td>签单和理赔必须亲力亲为</td><td>-humanservice 精准转入人工，不丢上下文</td></tr>
+  </tbody>
+</table>
+</div>
+
+
+<!-- ── 重点行业二：体检中心 ── -->
+<h4>重点行业详解二：体检中心</h4>
+<p>体检中心连接了 health-checkup-recommender（推荐引擎）和实际的预约履约：</p>
+<ul>
+  <li><strong>有固定的套餐体系</strong> — 基础、深度、专项（心脑血管/肿瘤筛查/女性等）</li>
+  <li><strong>有价格和预约容量</strong> — 每日可预约人数有限</li>
+  <li><strong>需要报告解读能力</strong> — 体检后的报告解读和复查建议是核心增值服务</li>
+  <li><strong>可能跨城市连锁</strong> — 同一品牌多城市分支，套餐和价格可能不同</li>
+</ul>
+
+<h5>访谈示例</h5>
+<div class="card">
+<pre style="background:#f8fafc;color:#334155;box-shadow:none;margin:0;"><code>🤖 Agent 引导访谈（自动识别"体检"→ 加载体检中心模板）
+
+Q1: 体检中心叫什么？属于哪个机构？
+    → 美年大健康·广州天河分院
+
+Q2: 覆盖哪些城市？
+    → 主要广州，天河和越秀两个分院
+
+Q3: 有哪些体检套餐类型？
+    □ 基础体检  □ 深度体检  □ 心脑血管专项
+    □ 肿瘤筛查  □ 女性专项  □ 男性专项
+    □ 高端VIP   □ 定制化
+    → 全都有
+
+Q4: 套餐价格范围？
+    → 基础 399 起，深度 1299-2999，专项 899-1999，VIP 3999-9999
+
+Q5: 客户能在线做什么？
+    → 套餐查询、个性化推荐、查空位、在线预约、报告解读——全都要
+
+Q6: 每天能接待多少人？提前多久预约？
+    → 每天约 200 人，建议提前 3 天，热门时段提前一周
+
+Q7: 什么情况转人工？
+    → VIP定制、团检报价、异常报告电话沟通
+
+✅ 帮你总结一下：
+   · 名称：美年大健康·广州天河分院
+   · 覆盖：广州（天河、越秀）
+   · 套餐：基础/深度/心脑血管/肿瘤/女性/男性/VIP/定制
+   · 价格：399 - 9999
+   · 容量：每日约 200 人，建议提前 3 天
+   · 人工：VIP定制、团检报价、异常报告电话沟通
+
+   确认无误？帮你上线。</code></pre>
+</div>
+
+<h5>生成的 service.json</h5>
+<pre><code class="language-json">{
+  "name": "美年大健康·广州天河分院",
+  "type": "service",
+  "description": "美年大健康广州天河分院，覆盖天河和越秀两大分院，提供基础到高端VIP全系列体检套餐",
+  "tags": ["体检", "健康检查", "美年大健康", "广州", "天河", "越秀", "肿瘤筛查", "心脑血管检查"],
+  "locations": ["广州-天河区", "广州-越秀区"],
+  "hours": "07:30-16:00 (体检), 08:00-17:00 (咨询)",
+  "agent_profile": {
+    "branches": [
+      {"name":"天河分院","address":"广州市天河区体育西路XX号"},
+      {"name":"越秀分院","address":"广州市越秀区环市东路XX号"}
+    ],
+    "daily_capacity": 200,
+    "advance_booking_days": 3,
+    "hot_booking_days": 7
+  },
+  "packages": {
+    "基础体检": [
+      {"id":"PH-BASIC-M","name":"男士基础体检","price":399,"items":28,"duration":"约1.5小时"},
+      {"id":"PH-BASIC-F","name":"女士基础体检","price":399,"items":30,"duration":"约1.5小时"}
+    ],
+    "深度体检": [
+      {"id":"PH-DEEP-M","name":"男士全面深度体检","price":1999,"items":52,"duration":"约3小时"},
+      {"id":"PH-DEEP-F","name":"女士全面深度体检","price":2299,"items":56,"duration":"约3.5小时"}
+    ],
+    "心脑血管": [
+      {"id":"PH-CARDIO","name":"心脑血管深度筛查","price":1599,"items":38,"duration":"约2小时"}
+    ],
+    "肿瘤筛查": [
+      {"id":"PH-CANCER-M","name":"男性肿瘤专项筛查","price":1999,"items":42,"duration":"约2小时"},
+      {"id":"PH-CANCER-F","name":"女性肿瘤专项筛查","price":2199,"items":45,"duration":"约2小时"}
+    ],
+    "高端VIP": [
+      {"id":"PH-VIP","name":"VIP尊享全面体检","price":5999,"items":72,"duration":"约4小时","note":"专属导检+独立VIP区+专家一对一解读"}
+    ]
+  },
+  "capabilities": [
+    {
+      "intent": "套餐查询",
+      "commands": [
+        {
+          "command": "list-packages",
+          "description": "查看所有体检套餐的类型、价格和项目数",
+          "params": {
+            "category": {"type":"string","required":false,"description":"套餐分类筛选"},
+            "gender": {"type":"string","required":false,"description":"male/female"},
+            "max_price": {"type":"number","required":false}
+          }
+        },
+        {
+          "command": "package-detail",
+          "description": "查看指定套餐的详细项目清单",
+          "params": {"package_id": {"type":"string","required":true}}
+        }
+      ]
+    },
+    {
+      "intent": "个性化推荐",
+      "commands": [{
+        "command": "recommend-checkup",
+        "description": "根据年龄、性别、症状、家族史推荐合适的体检套餐组合",
+        "params": {
+          "age": {"type":"number","required":true},
+          "gender": {"type":"string","required":true},
+          "symptoms": {"type":"array","required":false},
+          "family_history": {"type":"object","required":false},
+          "budget": {"type":"string","required":false}
+        },
+        "returns": {
+          "type":"object",
+          "properties": {
+            "risk_assessment":"array",
+            "recommended_packages":"array",
+            "estimated_total":"number",
+            "evidence_notes":"array"
+          }
+        }
+      }]
+    },
+    {
+      "intent": "预约体检",
+      "commands": [
+        {
+          "command": "check-slots",
+          "description": "查看可预约的日期和时段",
+          "params": {
+            "branch": {"type":"string","required":false,"description":"天河/越秀"},
+            "date_from": {"type":"string","required":false},
+            "date_to": {"type":"string","required":false}
+          }
+        },
+        {
+          "command": "book-checkup",
+          "description": "在线预约体检",
+          "params": {
+            "package_id": {"type":"string","required":true},
+            "branch": {"type":"string","required":true},
+            "date": {"type":"string","required":true},
+            "time_slot": {"type":"string","required":true},
+            "name": {"type":"string","required":true},
+            "phone": {"type":"string","required":true},
+            "gender": {"type":"string","required":true},
+            "age": {"type":"number","required":true}
+          },
+          "side_effects": "预约成功后名额扣减，如需改期请至少提前1天"
+        }
+      ]
+    },
+    {
+      "intent": "报告解读",
+      "commands": [{
+        "command": "explain-report",
+        "description": "对体检报告中的异常指标进行解读和复查建议",
+        "params": {
+          "booking_id": {"type":"string","required":true},
+          "abnormal_items": {"type":"array","required":false}
+        }
+      }]
+    },
+    {
+      "intent": "人工服务",
+      "commands": [{
+        "command": "-humanservice",
+        "description": "转接人工：VIP定制体检、团检报价（10人以上）、异常报告电话解读、投诉建议"
+      }]
+    }
+  ],
+  "protocols": ["-help", "-humanservice"]
+}</code></pre>
+
+<h5>体检中心 × health-checkup-recommender 的协作关系</h5>
+<div class="mermaid">
+flowchart TB
+    User["👤 用户"]
+    FA["🔍 find-agent"]
+    HCR["🩺 health-checkup-recommender<br/>(循证推荐引擎)"]
+    MZ["🏥 美年大健康<br/>(体检中心Agent)"]
+    AM["🏥 爱康国宾<br/>(体检中心Agent)"]
+
+    User -->|"35岁女性，想做体检"| FA
+    FA -->|发现推荐引擎| HCR
+    FA -->|发现体检中心| MZ
+    FA -->|发现体检中心| AM
+    HCR -->|"risk_assessment + 推荐项目"| FA
+    FA -->|list-packages| MZ
+    FA -->|list-packages| AM
+    MZ -->|套餐清单 + 价格| FA
+    AM -->|套餐清单 + 价格| FA
+    Note over FA: 交叉匹配：<br/>循证推荐 vs 套餐覆盖
+    FA -->|recommend-checkup| MZ
+    MZ -->|"深度套餐¥1999 覆盖90%推荐项"| FA
+    FA -->|recommend-checkup| AM
+    AM -->|"女性专项¥1599 覆盖75%推荐项"| FA
+    Note over FA: LLM 综合评分
+    FA --> User: "美年深度套餐¥1999 最匹配,<br/>爱康女性专项¥1599 也不错"
+    User --> FA: "选美年，预约周六"
+    FA -->|book-checkup| MZ
+    MZ -->|"✅ 预约成功"| FA
+</div>
+
+<div class="highlight-box green">
+  <strong>OceanBus 生态飞轮：</strong>health-checkup-recommender 提供循证知识，体检中心提供实际履约，find-agent 把它们连起来，用户一次对话完成从咨询到预约的全流程。
+</div>
+
+
+<h3>3.3 Agent 生成的产物</h3>
+
+<h4>3.3.1 service.json（从访谈中自动生成）</h4>
+<pre><code class="language-json">{
+  "name": "老张川味火锅",
+  "type": "service",
+  "description": "成都锦江区地道川味火锅，二十年老店，鲜毛肚和手工虾滑是招牌",
+  "tags": ["火锅", "川味", "成都", "锦江区"],
+  "locations": ["成都-锦江区"],
+  "hours": "11:00-23:00",
+  "capabilities": [
+    {
+      "intent": "看菜单",
+      "commands": [{
+        "command": "show-menu",
+        "description": "查看菜单和价格",
+        "params": {
+          "category": {"type":"string","required":false,"description":"锅底/荤菜/素菜/小吃/酒水"}
+        }
+      }]
+    },
+    {
+      "intent": "订位",
+      "commands": [
+        {
+          "command": "check-availability",
+          "description": "查看可订时段",
+          "params": {
+            "date": {"type":"string","required":false,"description":"日期 YYYY-MM-DD，默认今天"},
+            "party_size": {"type":"number","required":false,"description":"人数，默认2"}
+          }
+        },
+        {
+          "command": "make-reservation",
+          "description": "预订桌位",
+          "params": {
+            "date": {"type":"string","required":true},
+            "time": {"type":"string","required":true},
+            "party_size": {"type":"number","required":true},
+            "name": {"type":"string","required":true},
+            "phone": {"type":"string","required":true}
+          },
+          "side_effects": "预订确认后将为您保留桌位15分钟"
+        }
+      ]
+    },
+    {
+      "intent": "人工服务",
+      "commands": [{
+        "command": "-humanservice",
+        "description": "转接老板处理：团餐咨询、特殊需求、投诉"
+      }]
+    }
+  ],
+  "menu": {
+    "锅底": [{"name":"经典红油锅底","price":58},{"name":"鸳鸯锅底","price":68},{"name":"菌汤锅底","price":48}],
+    "荤菜": [{"name":"鲜切肥牛","price":48},{"name":"鲜毛肚","price":68},{"name":"手工虾滑","price":38}],
+    "素菜": [{"name":"土豆片","price":12},{"name":"藕片","price":15}],
+    "小吃": [{"name":"红糖糍粑","price":18},{"name":"冰粉","price":10}],
+    "酒水": [{"name":"酸梅汤","price":8},{"name":"啤酒","price":12}]
+  }
+}</code></pre>
+
+<div class="highlight-box blue">
+  <strong>关键设计点：</strong>
+  <ul>
+    <li>所有字段由 Agent 根据访谈自动填入，老板零手写</li>
+    <li><code>capabilities</code> 从行业模板预设 + 对话中老板的选择生成</li>
+    <li><code>menu</code> 支持 OCR（拍照识别）+ 自然语言口述 + 文字粘贴三种输入方式</li>
+    <li><code>side_effects</code> 自动标注有副作用操作——LLM 据此判断能否自动执行</li>
+  </ul>
+</div>
+
+
+<h4>3.3.2 service-runner.js（通用引擎，一次写好，全部行业共用）</h4>
+<pre><code class="language-javascript">// service-runner.js — OceanBus 通用 CLI 服务引擎
+// 读取 service.json，自动处理 -help、命令路由、-humanservice
+// 老板不需要看懂这个文件，Agent 生成 service.json 后一键启动
+
+const service = require('./service.json');
+const { OceanBus } = require('oceanbus');
+const bus = new OceanBus({ apiKey: process.env.OCEANBUS_API_KEY });
+
+// --- 协议处理 ---
+
+// -help: 自动从 service.json 的 capabilities 生成响应
+bus.on('protocol', '-help', () => ({
+  type: 'protocol', protocol: '-help',
+  agent: {
+    name: service.name,
+    version: service.version || '1.0.0',
+    description: service.description
+  },
+  capabilities: service.capabilities,
+  limits: service.limits || { rate: '30 req/min' },
+  protocols: ['-help', '-humanservice']
+}));
+
+// -humanservice: 自动转发给老板
+bus.on('protocol', '-humanservice', (msg) => ({
+  type: 'protocol', protocol: '-humanservice',
+  desk_openid: service.desk_openid || bus.myOpenId,
+  ticket_id: `TK-${Date.now().toString(36)}`,
+  estimated_wait: service.human_response_time || '约 5 分钟',
+  context: `已通知${service.name}，请稍候`
+}));
+
+// --- 命令路由：注册所有 capability 中的命令 ---
+for (const cap of service.capabilities) {
+  for (const cmd of cap.commands) {
+    if (cmd.command === '-humanservice') continue;
+
+    bus.on('command', cmd.command, async (msg) => {
+      const errors = validateParams(cmd.params, msg.params || {});
+      if (errors.length > 0) {
+        return { error: '参数错误', details: errors, usage: cmd };
+      }
+      const handler = handlers[cmd.command];
+      if (!handler) {
+        return { error: `命令 ${cmd.command} 尚未实现`, suggestion: '试试 -help' };
+      }
+      try {
+        const result = await handler(msg.params, service);
+        return { command: cmd.command, result };
+      } catch (e) {
+        return { error: e.message };
+      }
+    });
+  }
+}
+
+// --- 业务处理函数（通用实现）---
+const handlers = {
+  'show-menu': (params, svc) => {
+    if (params.category && svc.menu[params.category]) {
+      return { [params.category]: svc.menu[params.category] };
+    }
+    return svc.menu;
+  },
+  'check-availability': (params, svc) => {
+    const date = params.date || new Date().toISOString().slice(0, 10);
+    const size = params.party_size || 2;
+    const slots = generateSlots(svc, date, size);
+    return { date, party_size: size, slots };
+  },
+  'make-reservation': (params, svc) => {
+    const bookingId = `${svc.name.slice(0,2)}${Date.now().toString(36)}`;
+    return {
+      booking_id: bookingId, status: 'confirmed',
+      restaurant: svc.name, date: params.date, time: params.time,
+      party_size: params.party_size, name: params.name,
+      hold_until: '预订保留 15 分钟'
+    };
+  }
+  // 更多通用 handler 按需添加
+};
+
+bus.listen();
+console.log(`✅ ${service.name} 已上线 OceanBus 网络`);</code></pre>
+
+<div class="highlight-box blue">
+  <strong>关键设计点：</strong>
+  <ul>
+    <li><code>service-runner.js</code> 是唯一需要写一次的代码，跟行业无关</li>
+    <li>命令路由、参数校验、<code>-help</code> 生成全部由 <code>service.json</code> 驱动</li>
+    <li>业务处理函数是通用模板——初期 10-20 个通用 handler 可覆盖 80% 的小商户场景</li>
+  </ul>
+</div>
+
+
+<h3>3.4 上线后的效果</h3>
+<div class="mermaid">
+sequenceDiagram
+    actor Guest as 👤 食客
+    participant FA as 🔍 find-agent
+    participant YP as 📒 黄页
+    participant Zhang as 🍲 老张川味火锅
+    actor Owner as 👤 老板(手机通知)
+
+    rect rgb(227, 242, 253)
+        Guest->>FA: "成都锦江区附近有没有火锅店，4个人今晚"
+        FA->>YP: 搜索 "火锅,成都,锦江区"
+        YP-->>FA: 8 家，含老张川味火锅 (声誉 4.8)
+    end
+    rect rgb(255, 243, 224)
+        FA->>Zhang: -help
+        Zhang-->>FA: show-menu, check-availability, make-reservation, -humanservice
+        FA->>Zhang: check-availability(date="2026-05-09", party_size=4)
+        Zhang-->>FA: 18:00, 18:30, 19:30 有 4 人桌
+    end
+    rect rgb(232, 245, 233)
+        FA->>Guest: "老张川味火锅 (4.8⭐) 今晚有 18:00/18:30/19:30，要订吗？"
+        Guest->>FA: "订 18:30"
+        FA->>Zhang: make-reservation(date="5/9", time="18:30", party_size=4, name="王先生", phone="139****")
+        Zhang-->>FA: ✅ booking_id=ZG260509_003, confirmed
+    end
+    rect rgb(252, 228, 236)
+        Zhang-->>Owner: 📱 "新预订：王先生 4人 今晚18:30"
+    end
+    FA->>Guest: "已订好！老张川味火锅，今晚 18:30，4人桌"
+</div>
+
+<div class="highlight-box green">
+  <strong>老板全程零代码</strong>——一次对话，Agent 搞定一切，生意就上线了。
+</div>
+
+
+<h3>3.5 设计原则</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>#</th><th>原则</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>Agent 是翻译层</strong></td><td>老板说人话，Agent 负责翻译成 JSON、命令、参数——老板永远不需要知道 JSON Schema 长什么样</td></tr>
+    <tr><td>2</td><td><strong>行业模板降低访谈成本</strong></td><td>每种行业预设 capabilities 模板，Agent 只需要问差异化的问题</td></tr>
+    <tr><td>3</td><td><strong>通用引擎，配置驱动</strong></td><td><code>service-runner.js</code> 一次写好，全部行业共用</td></tr>
+    <tr><td>4</td><td><strong>菜单/价目表多模态输入</strong></td><td>拍照 OCR、自然语言口述、复制粘贴——哪种方便用哪种</td></tr>
+    <tr><td>5</td><td><strong>人工兜底内置</strong></td><td>每个服务默认支持 <code>-humanservice</code>，超出 AI 能力的自动转老板</td></tr>
+    <tr><td>6</td><td><strong>上线即挂牌</strong></td><td><code>register</code> + <code>publish</code> 一气呵成，老板不需要理解黄页、OpenID、Agent Card</td></tr>
+  </tbody>
+</table>
+</div>
+
+
+<h3>3.6 实现路线</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>优先级</th><th>任务</th><th>说明</th><th>工作量</th></tr></thead>
+  <tbody>
+    <tr><td><span class="phase-tag p0">P0</span></td><td><strong>通用 service-runner.js</strong></td><td>读取 service.json，自动处理 -help、命令路由、-humanservice。内置 10-20 个通用 handler</td><td>1-2 天</td></tr>
+    <tr><td><span class="phase-tag p0">P0</span></td><td><strong>Agent 访谈脚本</strong></td><td>引导式对话，从自然语言中提取业务信息，生成 service.json。含 OCR 菜单识别</td><td>1-2 天</td></tr>
+    <tr><td><span class="phase-tag p1">P1</span></td><td><strong>行业模板库 v1</strong></td><td>餐厅、诊所、理发、维修、民宿、设计、保险、体检 8 个行业的预设 capabilities + 访谈问题</td><td>2 天</td></tr>
+    <tr><td><span class="phase-tag p1">P1</span></td><td><strong>ocean-desk 通知桥</strong></td><td>-humanservice 触发时实时通知老板（App 推送 / 短信 / 微信模板消息）</td><td>1 天</td></tr>
+    <tr><td><span class="phase-tag p2">P2</span></td><td><strong>预约状态管理</strong></td><td>简易的文件型或内存型 slot 管理，支撑 check-availability / make-reservation</td><td>1 天</td></tr>
+    <tr><td><span class="phase-tag p2">P2</span></td><td><strong>模板市场</strong></td><td>允许社区贡献行业模板，审核后加入模板库</td><td>3 天</td></tr>
+  </tbody>
+</table>
+</div>
+
+<hr>
+
+<!-- ════════════════════════════════════════ -->
+<!--  四、竞争格局                              -->
+<!-- ════════════════════════════════════════ -->
+<h2>四、竞争格局中的位置</h2>
+<div class="mermaid">
+quadrantChart
+    title A2A 协议竞争格局
+    x-axis 企业级 → 开放网络
+    y-axis 需要服务器/endpoint → 无需服务器/endpoint
+    quadrant-1 开放 + 需服务器
+    quadrant-2 开放 + 无需服务器
+    quadrant-3 企业级 + 需服务器
+    quadrant-4 企业级 + 无需服务器
+    Google A2A: [0.2, 0.85]
+    IoA/Agntcy: [0.15, 0.8]
+    AutoGen: [0.1, 0.85]
+    OpenAI Agents SDK: [0.05, 0.9]
+    ANP: [0.85, 0.6]
+    Fetch.ai: [0.9, 0.55]
+    MCP: [0.4, 0.95]
+    OceanBus: [0.75, 0.15]
+</div>
+
+<div class="highlight-box green">
+  <strong>OceanBus 占据的格子（右下角）是蓝海</strong>——目前没有其他协议在"无需服务器"和"开放网络"的条件组合下工作。
+</div>
+
+<h3>不可复制性（别人要追需要付出的代价）</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>OceanBus 特性</th><th>为什么别人不能简单加</th></tr></thead>
+  <tbody>
+    <tr><td>邮箱模型（store-and-forward）</td><td>需要从 RPC 架构根本上改为异步消息队列——推翻现有协议栈</td></tr>
+    <tr><td>盲传（平台不可读内容）</td><td>大厂法务部和风控部会毙掉——"连我们都看不到内容"的风险不可接受</td></tr>
+    <tr><td>72h 自动删除</td><td>大厂的商业模式是数据——放弃数据等于放弃广告/训练语料收入</td></tr>
+    <tr><td>事实层不做裁判</td><td>大厂被监管放大镜盯着——必须主动审核内容，不能只当管道</td></tr>
+    <tr><td>声誉层（L1 内置）</td><td>单独做声誉不难，但跟邮箱+盲传+72h删除打包在一起——整套换</td></tr>
+  </tbody>
+</table>
+</div>
+
+<hr>
+
+<!-- ════════════════════════════════════════ -->
+<!--  五、下一步建议                            -->
+<!-- ════════════════════════════════════════ -->
+<h2>五、下一步建议</h2>
+
+<ol>
+  <li><strong><code>-help</code> 结构化规范</strong> — 撰写一份 1 页的推荐规范文档（参考 2.1 节），放在 SDK 文档中供 Agent 开发者参考</li>
+  <li><strong>Agent Card JSON Schema</strong> — 定义正式的 JSON Schema，黄页服务可以基于此做结构化搜索排序</li>
+  <li><strong>MCP 桥接器 POC</strong> — 写一个 OceanBus→MCP 的包装器，让 MCP 客户端把 OceanBus Agent 当工具调用，零摩擦导流</li>
+  <li><strong>find-agent 参考实现</strong> — 以上述流程为蓝图，实现一个最小可行的 find-agent，验证全流程可行性</li>
+  <li><strong><code>thread_id</code> 决策</strong> — 决定是否在 L0 消息协议中增加可选的 <code>thread_id</code> 字段（多轮对话的协议级支持）</li>
+</ol>
+
+</div>
+
+<footer class="footer">
+  OceanBus A2A 通信流程设计 &middot; 2026 &middot; AI Agent 时代的通信基础设施
+</footer>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'default',
+    themeVariables: {
+      fontSize: '14px',
+      primaryColor: '#e6f4f4',
+      primaryBorderColor: '#0d7c7c',
+      lineColor: '#5a6b7c',
+      secondaryColor: '#eff6ff',
+      tertiaryColor: '#f8fafb'
+    }
+  });
+  hljs.highlightAll();
+</script>
+</body>
+</html>

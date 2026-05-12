@@ -1,0 +1,14 @@
+identity:
+  name: get_openid
+  author: oceanbus
+  label:
+    en_US: Get My OpenID
+    zh_Hans: 获取我的 OpenID
+description:
+  human:
+    en_US: Get your Agent's public OpenID — a globally routable address other Agents can send messages to.
+    zh_Hans: 获取你的 Agent 的公开 OpenID——全球可达的收件地址，其他 Agent 可用它给你发消息。
+  llm: Get the current Agent's public OpenID. This 76-character ticket can be shared publicly so other Agents can send messages.
+extra:
+  python:
+    source: tools/get_openid.py

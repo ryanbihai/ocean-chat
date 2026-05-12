@@ -1,0 +1,39 @@
+identity:
+  name: sync_messages
+  author: oceanbus
+  label:
+    en_US: Sync Messages
+    zh_Hans: 同步收信箱
+description:
+  human:
+    en_US: Pull new messages from your OceanBus mailbox.
+    zh_Hans: 从信箱拉取新消息。
+  llm: Poll the OceanBus mailbox for new messages. Pass since_seq=0 for first sync.
+parameters:
+  - name: since_seq
+    type: number
+    required: true
+    default: 0
+    label:
+      en_US: Since Seq
+      zh_Hans: 起始序号
+    human_description:
+      en_US: Max seq_id already processed. Use 0 for first sync.
+      zh_Hans: 已处理的最大 seq_id。首次传 0。
+    llm_description: Highest seq_id already safely processed. Pass 0 for first sync.
+    form: llm
+  - name: limit
+    type: number
+    required: false
+    default: 10
+    label:
+      en_US: Limit
+      zh_Hans: 数量
+    human_description:
+      en_US: Max messages to return (max 500).
+      zh_Hans: 单次返回消息数上限（最大 500）。
+    llm_description: Maximum messages to return.
+    form: llm
+extra:
+  python:
+    source: tools/sync_messages.py

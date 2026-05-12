@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>好啦科技 - AI驱动的下一代体检基础设施</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 极致克制的字体与平滑滚动 */
+        body { background-color: #f8fafc; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif; -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
+        
+        /* 单一品牌蓝调的柔和光晕 */
+        .glow-bg { position: fixed; top: -15%; left: 10%; width: 60vw; height: 60vh; background: radial-gradient(circle, rgba(37, 99, 235, 0.08) 0%, rgba(255,255,255,0) 70%); z-index: -1; pointer-events: none; }
+        .grid-bg { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-image: linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.6) 1px, transparent 1px); background-size: 40px 40px; z-index: -2; }
+
+        /* 高阶毛玻璃卡片 */
+        .glass-panel { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 1); box-shadow: 0 4px 24px -8px rgba(15, 23, 42, 0.05); border-radius: 1.25rem; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .glass-panel:hover { box-shadow: 0 12px 32px -8px rgba(37, 99, 235, 0.1); transform: translateY(-2px); border-color: rgba(219, 234, 254, 0.8); }
+
+        /* 优化后的 CLI 控制台 (无折行，极度清晰) */
+        .cli-wrapper { background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.01); transition: all 0.2s ease-in-out; position: relative; z-index: 50; }
+        .cli-wrapper:focus-within { border-color: #3b82f6; box-shadow: 0 20px 40px -10px rgba(37, 99, 235, 0.15), 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .cli-input { width: 100%; border: none; outline: none; background: transparent; font-size: 1.125rem; font-weight: 500; color: #0f172a; padding: 1.25rem 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cli-input::placeholder { color: #94a3b8; font-weight: 400; }
+        
+        /* 纯净蓝渐变 */
+        .text-blue-gradient { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    </style>
+</head>
+<body class="relative">
+
+    <!-- 底层视觉 -->
+    <div class="grid-bg"></div>
+    <div class="glow-bg"></div>
+
+    <!-- 导航栏 (极简白) -->
+    <nav class="fixed w-full z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="font-extrabold text-2xl tracking-tight text-slate-900">好啦科技<span class="text-blue-600">.</span></div>
+            <div class="hidden md:flex gap-8 text-sm font-medium text-slate-600">
+                <a href="#value" class="hover:text-blue-600 transition">差异化价值</a>
+                <a href="#workflow" class="hover:text-blue-600 transition">履约闭环</a>
+                <a href="#trust" class="hover:text-blue-600 transition">合规与客户</a>
+            </div>
+            <!-- 扫码动作前置 -->
+            <a href="#experience" class="bg-slate-900 text-white text-sm font-medium px-5 py-2.5 rounded-full hover:bg-blue-600 transition duration-300">
+                扫码体验管家
+            </a>
+        </div>
+    </nav>
+
+    <!-- 第一屏：Hero + 重新设计的 CLI -->
+    <header class="pt-40 pb-16 px-6 relative z-10">
+        <div class="max-w-4xl mx-auto text-center pt-8">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold mb-8 tracking-wide">
+                面向 AI Agent 与企业的高效体检网络
+            </div>
+            
+            <h1 class="text-5xl md:text-6xl font-extrabold tracking-tight text-slate-900 mb-6 leading-[1.15]">
+                用 AI 与数据，<br><span class="text-blue-gradient">重构健康体检。</span>
+            </h1>
+            <p class="text-lg text-slate-500 mb-12 max-w-2xl mx-auto leading-relaxed">
+                为保险机构与企业提供从 <strong class="text-slate-800">“智能体检定制”、“全国 538 家门店履约” </strong>到<strong class="text-slate-800"> “体检数据标准化交付”</strong> 的下一代数字化服务。
+            </p>
+
+            <!-- 重构的 CLI 模块：极其清晰、防折行、强指引 -->
+            <div class="max-w-2xl mx-auto relative text-left mb-16">
+                <div class="cli-wrapper flex flex-col">
+                    <div class="flex items-center px-5">
+                        <!-- 极客且易懂的终端提示符 -->
+                        <span class="text-blue-600 font-mono text-xl font-bold mr-4 select-none">></span>
+                        <input type="text" id="cliInput" class="cli-input flex-1" autocomplete="off">
+                        <div class="hidden md:block ml-4 flex-shrink-0">
+                            <span class="font-mono text-xs text-slate-400 bg-slate-50 border border-slate-200 px-2 py-1 rounded">Cmd K</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 友好的快捷指令指引区 -->
+                    <div id="cliSuggestions" class="px-5 py-3 bg-slate-50/50 rounded-b-2xl border-t border-slate-100 flex flex-wrap gap-2 items-center">
+                        <span class="text-xs font-bold text-slate-400 mr-2 uppercase tracking-wider">快捷指令：</span>
+                        <button onclick="executeCmd('/核心差异')" class="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-full hover:border-blue-300 hover:text-blue-600 transition shadow-sm font-medium">/核心差异</button>
+                        <button onclick="executeCmd('/查体检网络')" class="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-full hover:border-blue-300 hover:text-blue-600 transition shadow-sm font-medium">/查体检网络</button>
+                        <button onclick="executeCmd('/看体检管家')" class="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-full hover:border-blue-300 hover:text-blue-600 transition shadow-sm font-medium">/看体检管家</button>
+                    </div>
+
+                    <!-- 动态结果展开区 -->
+                    <div id="cliResult" class="hidden px-5 py-6 bg-white rounded-b-2xl border-t border-slate-100 max-h-96 overflow-y-auto"></div>
+                </div>
+            </div>
+
+            <!-- 数据呈现：收敛颜色，高级克制 -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
+                <div class="glass-panel p-5 text-center">
+                    <div class="text-3xl font-black text-slate-800">3400<span class="text-lg text-blue-600">万+</span></div>
+                    <div class="text-xs text-slate-500 mt-2 font-bold tracking-wide">体检与测评用户</div>
+                </div>
+                <div class="glass-panel p-5 text-center">
+                    <div class="text-3xl font-black text-slate-800">538<span class="text-lg text-blue-600">家</span></div>
+                    <div class="text-xs text-slate-500 mt-2 font-bold tracking-wide">直连优质体检门店</div>
+                </div>
+                <div class="glass-panel p-5 text-center">
+                    <div class="text-3xl font-black text-slate-800">241<span class="text-lg text-blue-600">城</span></div>
+                    <div class="text-xs text-slate-500 mt-2 font-bold tracking-wide">覆盖全国城市网络</div>
+                </div>
+                <div class="glass-panel p-5 text-center">
+                    <div class="text-3xl font-black text-slate-800">70<span class="text-lg text-blue-600">+</span></div>
+                    <div class="text-xs text-slate-500 mt-2 font-bold tracking-wide">深度合作保险机构</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 第二屏：差异化与核心价值 (直球对决，一眼看懂价值) -->
+    <section id="value" class="py-24 relative z-10 bg-white border-y border-slate-200/60">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-bold text-slate-900">不止是撮合，更是极致的效率重构</h2>
+                <p class="text-slate-500 mt-4">对比传统体检中介，好啦科技在每一个环节为您构筑差异化优势。</p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-8">
+                <!-- 对比卡片 1 -->
+                <div class="glass-panel p-8">
+                    <div class="text-xs font-black tracking-widest text-blue-500 mb-4 uppercase">Value 01 / 定制化</div>
+                    <h3 class="text-xl font-bold text-slate-900 mb-6">拒绝固化的死套餐</h3>
+                    <div class="space-y-4">
+                        <div class="text-sm text-slate-400 line-through decoration-slate-300">传统：提供几套固定方案，导致客户过度检查或严重漏查。</div>
+                        <div class="text-sm text-slate-700 font-medium p-4 bg-blue-50/50 rounded-lg border border-blue-100 leading-relaxed">
+                            <span class="text-blue-600 font-bold mr-1">好啦：</span>基于 3400 万数据构建的 AI 引擎。用户仅需 1 分钟完成健康画像，在预算内自动生成千人千面的体检组合，把钱花在刀刃上。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 对比卡片 2 -->
+                <div class="glass-panel p-8">
+                    <div class="text-xs font-black tracking-widest text-blue-500 mb-4 uppercase">Value 02 / 履约力</div>
+                    <h3 class="text-xl font-bold text-slate-900 mb-6">全网 API 动态直连</h3>
+                    <div class="space-y-4">
+                        <div class="text-sm text-slate-400 line-through decoration-slate-300">传统：覆盖面窄，依赖人工表单确认排期，极易出错。</div>
+                        <div class="text-sm text-slate-700 font-medium p-4 bg-blue-50/50 rounded-lg border border-blue-100 leading-relaxed">
+                            <span class="text-blue-600 font-bold mr-1">好啦：</span>深度直连全国 241 城、538 家优质门店 API（涵盖美年、瑞慈等）。支持系统级一键自动发单，排期状态实时同步。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 对比卡片 3 -->
+                <div class="glass-panel p-8">
+                    <div class="text-xs font-black tracking-widest text-blue-500 mb-4 uppercase">Value 03 / 数据流</div>
+                    <h3 class="text-xl font-bold text-slate-900 mb-6">结构化标准数据交付</h3>
+                    <div class="space-y-4">
+                        <div class="text-sm text-slate-400 line-through decoration-slate-300">传统：仅提供纸质报告或不可解析的 PDF 图片，形成数据孤岛。</div>
+                        <div class="text-sm text-slate-700 font-medium p-4 bg-blue-50/50 rounded-lg border border-blue-100 leading-relaxed">
+                            <span class="text-blue-600 font-bold mr-1">好啦：</span>自主 NLP 引擎将报告清洗为 100% 结构化字典数据。可直接输出至企业的健康看板，或无缝对接到保司的核保风控模型。
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 第三屏：全链路流程 (检前、检中、检后) -->
+    <section id="workflow" class="py-24 relative z-10">
+        <div class="max-w-5xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row gap-12 items-center">
+                <div class="md:w-1/3">
+                    <h2 class="text-3xl font-bold text-slate-900 mb-4 leading-tight">全生命周期的<br>体检服务链路</h2>
+                    <p class="text-slate-500 mb-6">科技赋予精度，管家赋予温度。</p>
+                    <div class="h-1 w-12 bg-blue-600 rounded"></div>
+                </div>
+                
+                <div class="md:w-2/3 space-y-6">
+                    <!-- 检前 -->
+                    <div class="glass-panel p-6 flex items-start gap-5">
+                        <div class="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold flex-shrink-0">1</div>
+                        <div>
+                            <h4 class="text-lg font-bold text-slate-900 mb-1">检前：AI 智能精准定制</h4>
+                            <p class="text-sm text-slate-600 leading-relaxed">依托海量数据沉淀，好啦体检管家 Bot 智能评估个人风险，告别盲目选择，精准推荐必查项目。</p>
+                        </div>
+                    </div>
+                    <!-- 检中 -->
+                    <div class="glass-panel p-6 flex items-start gap-5 ml-0 md:ml-6">
+                        <div class="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold flex-shrink-0">2</div>
+                        <div>
+                            <h4 class="text-lg font-bold text-slate-900 mb-1">检中：全国网络 + 专属管家</h4>
+                            <p class="text-sm text-slate-600 leading-relaxed">538家核心实体门店覆盖网络支撑极速发单。同时配备专属真人管家，解决检中疑难与加项指导。</p>
+                        </div>
+                    </div>
+                    <!-- 检后 -->
+                    <div class="glass-panel p-6 flex items-start gap-5 ml-0 md:ml-12">
+                        <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold flex-shrink-0">3</div>
+                        <div>
+                            <h4 class="text-lg font-bold text-slate-900 mb-1">检后：标准结构化数据回传</h4>
+                            <p class="text-sm text-slate-600 leading-relaxed">提供结构化 JSON 数据接口，打破纸质报告孤岛，让体检结果真正赋能企业的健康管理与业务分析。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 第四屏：合规与客户墙 (极其克制高级) -->
+    <section id="trust" class="py-20 bg-slate-900 text-slate-300 relative z-10">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-bold text-white">金融级合规，数十家头部机构的信赖</h2>
+                <p class="text-slate-400 mt-4">满足极其严苛的 IT 审计与隐私保护要求。</p>
+            </div>
+
+            <div class="grid md:grid-cols-4 gap-6 mb-20 text-center">
+                <div class="p-6 border border-slate-700 rounded-xl bg-slate-800/50">
+                    <h4 class="font-bold text-white mb-2 text-lg">国家等保三级</h4>
+                    <p class="text-xs text-slate-400">最高级别非银机构数据安全防护</p>
+                </div>
+                <div class="p-6 border border-slate-700 rounded-xl bg-slate-800/50">
+                    <h4 class="font-bold text-white mb-2 text-lg">ISO 体系双认证</h4>
+                    <p class="text-xs text-slate-400">27001信息安全与9001质量管理</p>
+                </div>
+                <div class="p-6 border border-slate-700 rounded-xl bg-slate-800/50">
+                    <h4 class="font-bold text-white mb-2 text-lg">精算与数据基因</h4>
+                    <p class="text-xs text-slate-400">懂保险业务更懂底层数据逻辑</p>
+                </div>
+                <div class="p-6 border border-slate-700 rounded-xl bg-slate-800/50">
+                    <h4 class="font-bold text-white mb-2 text-lg">40+ 知识产权</h4>
+                    <p class="text-xs text-slate-400">涵盖智能推荐系统等多项核心软著</p>
+                </div>
+            </div>
+            
+            <div class="border-t border-slate-700 pt-12 text-center">
+                <!-- 纯净的文字版客户矩阵 -->
+                <div class="flex flex-wrap justify-center gap-x-12 gap-y-6 text-lg font-bold text-slate-500">
+                    <span class="hover:text-white transition cursor-default">中国平安</span>
+                    <span class="hover:text-white transition cursor-default">中国人寿</span>
+                    <span class="hover:text-white transition cursor-default">太平洋保险</span>
+                    <span class="hover:text-white transition cursor-default">太平人寿</span>
+                    <span class="hover:text-white transition cursor-default">泰康在线</span>
+                    <span class="hover:text-white transition cursor-default">阳光保险</span>
+                    <span class="hover:text-white transition cursor-default">众安在线</span>
+                    <span class="hover:text-white transition cursor-default">友邦保险</span>
+                    <span class="hover:text-white transition cursor-default">农银人寿</span>
+                    <span class="hover:text-white transition cursor-default">中信保诚</span>
+                    <span class="hover:text-white transition cursor-default">国华人寿</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 第五屏：直接扫码体验 -->
+    <section id="experience" class="py-24 relative z-10 bg-white">
+        <div class="max-w-4xl mx-auto px-6">
+            <div class="glass-panel border-blue-100 p-12 text-center relative overflow-hidden bg-gradient-to-b from-blue-50/50 to-white/80">
+                <div class="relative z-10">
+                    <div class="text-blue-600 font-bold tracking-widest text-xs mb-4 uppercase">Experience Now</div>
+                    <h2 class="text-3xl font-extrabold text-slate-900 mb-4">无需等待，立即唤醒 AI 体检管家</h2>
+                    <p class="text-slate-500 mb-10 max-w-md mx-auto text-sm">
+                        拿出微信扫一扫，亲身感受从“智能风险画像”到“千人千面方案定制”的极速体验。
+                    </p>
+                    
+                    <div class="flex flex-col items-center">
+                        <!-- 极其干净的二维码框 -->
+                        <div class="w-48 h-48 bg-white border border-slate-200 rounded-2xl flex items-center justify-center p-3 shadow-xl mb-6 relative">
+                            <div class="w-full h-full bg-slate-50 flex items-center justify-center text-slate-400 text-sm font-bold rounded-xl border border-dashed border-slate-300">
+                                小程序码占位
+                            </div>
+                        </div>
+                        <div class="text-sm font-medium text-slate-500">↑ 微信扫码获取您的专属体检方案</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="py-8 border-t border-slate-200 text-center text-xs font-medium text-slate-400 bg-white">
+        <div class="max-w-6xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center">
+            <p>&copy; 2015-2024 北京好啦科技有限公司.</p>
+            <p class="mt-2 md:mt-0 font-mono bg-slate-50 border border-slate-100 px-2 py-1 rounded">AI驱动的数字化体检基础设施</p>
+        </div>
+    </footer>
+
+    <!-- CLI 交互及打字机脚本 -->
+    <script>
+        const cliInput = document.getElementById('cliInput');
+        const cliSuggestions = document.getElementById('cliSuggestions');
+        const cliResult = document.getElementById('cliResult');
+
+        // 打字机占位符效果
+        const placeholders = [
+            "尝试输入 /核心差异 了解更多...",
+            "也可以输入 /查体检网络...",
+            "或者试试输入 /看体检管家..."
+        ];
+        let placeholderIdx = 0;
+        let charIdx = 0;
+        let isDeleting = false;
+
+        function typePlaceholder() {
+            const currentText = placeholders[placeholderIdx];
+            if (!isDeleting && charIdx <= currentText.length) {
+                cliInput.setAttribute('placeholder', currentText.substring(0, charIdx));
+                charIdx++;
+                setTimeout(typePlaceholder, 100);
+            } else if (isDeleting && charIdx >= 0) {
+                cliInput.setAttribute('placeholder', currentText.substring(0, charIdx));
+                charIdx--;
+                setTimeout(typePlaceholder, 50);
+            } else {
+                isDeleting = !isDeleting;
+                if (!isDeleting) {
+                    placeholderIdx = (placeholderIdx + 1) % placeholders.length;
+                    setTimeout(typePlaceholder, 500); // Wait before typing next
+                } else {
+                    setTimeout(typePlaceholder, 2000); // Wait before deleting
+                }
+            }
+        }
+        // 启动打字机
+        setTimeout(typePlaceholder, 1000);
+
+        // 命令执行逻辑
+        window.executeCmd = function(cmd) {
+            cliInput.value = cmd;
+            cliInput.focus();
+            processCommand(cmd);
+        };
+
+        cliInput.addEventListener('input', function(e) {
+            processCommand(e.target.value.trim());
+        });
+
+        function processCommand(val) {
+            if(!val) {
+                cliSuggestions.classList.remove('hidden');
+                cliResult.classList.add('hidden');
+                return;
+            }
+            
+            cliSuggestions.classList.add('hidden');
+            cliResult.classList.remove('hidden');
+            const lowerVal = val.toLowerCase();
+            
+            if(lowerVal.includes('差异') || lowerVal.includes('不同') || lowerVal.includes('优势')) {
+                cliResult.innerHTML = `
+                    <div class="animate-fade-in">
+                        <div class="font-bold text-slate-800 text-lg mb-3"><span class="text-blue-600 mr-2">></span>核心差异化优势</div>
+                        <ul class="text-sm text-slate-600 space-y-2">
+                            <li><strong class="text-slate-800">1. 检前差异：</strong>抛弃死套餐，利用 AI 引擎基于个人数据智能定制。</li>
+                            <li><strong class="text-slate-800">2. 检中差异：</strong>不再依赖人工排期，API 直连 538 家实体门店，极速发单。</li>
+                            <li><strong class="text-slate-800">3. 检后差异：</strong>拒绝死板的 PDF 图片，交付 100% 结构化的字典数据。</li>
+                        </ul>
+                    </div>`;
+            } 
+            else if(lowerVal.includes('网') || lowerVal.includes('门') || lowerVal.includes('城市')) {
+                cliResult.innerHTML = `
+                    <div class="animate-fade-in">
+                        <div class="font-bold text-slate-800 text-lg mb-3"><span class="text-blue-600 mr-2">></span>全国履约网络数据</div>
+                        <div class="flex gap-6 mb-3">
+                            <div><span class="text-2xl font-bold text-slate-800">241</span> <span class="text-xs text-slate-500">城市覆盖</span></div>
+                            <div><span class="text-2xl font-bold text-slate-800">538</span> <span class="text-xs text-slate-500">直连门店</span></div>
+                        </div>
+                        <p class="text-sm text-slate-600 bg-slate-50 p-3 rounded border border-slate-100">涵盖美年、瑞慈等主流品牌，支持通过 API 实时查询网点状态与自动排期发单，配备专属真人管家保障履约温度。</p>
+                    </div>`;
+            }
+            else if(lowerVal.includes('管家') || lowerVal.includes('定制') || lowerVal.includes('体验')) {
+                cliResult.innerHTML = `
+                    <div class="animate-fade-in">
+                        <div class="font-bold text-slate-800 text-lg mb-2"><span class="text-blue-600 mr-2">></span>AI 体检管家</div>
+                        <p class="text-sm text-slate-600 mb-4">通过微信小程序即可极速唤醒。基于 3400 万测评数据，自动为用户提供千人千面的健康风险画像与专属方案推荐。</p>
+                        <a href="#experience" class="text-sm bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition inline-block">向下滚动直接扫码体验 ↓</a>
+                    </div>`;
+            }
+            else {
+                cliResult.innerHTML = `<div class="text-slate-500 text-sm">正在检索与 "${val}" 相关的服务模块...</div>`;
+            }
+        }
+
+        // 快捷键 Cmd+K
+        document.addEventListener('keydown', function(e) {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                cliInput.focus();
+            }
+        });
+    </script>
+</body>
+</html>

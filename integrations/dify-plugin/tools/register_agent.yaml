@@ -1,0 +1,14 @@
+identity:
+  name: register_agent
+  author: oceanbus
+  label:
+    en_US: Register Agent
+    zh_Hans: 注册 Agent
+description:
+  human:
+    en_US: Create a new OceanBus Agent identity. Returns agent_id and api_key.
+    zh_Hans: 创建新的 OceanBus Agent 身份。返回 agent_id 和 api_key。
+  llm: Register a brand-new OceanBus Agent identity. Returns agent_id and api_key — user must save the api_key and update their tool credentials.
+extra:
+  python:
+    source: tools/register_agent.py

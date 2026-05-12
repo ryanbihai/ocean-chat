@@ -1,180 +1,192 @@
-# 🌊 Ocean Agent — 保险代理人的 AI 工作台
+# OceanBus — Agent-to-Agent Communication Protocol
 
-**每天早上打开，三件事一目了然：今天聊谁、聊什么、怎么约见面。**
+**`npm install oceanbus` → 一条命令让你的 AI Agent 获得全球地址**
 
-[![npm](https://img.shields.io/npm/v/oceanbus)](https://www.npmjs.com/package/oceanbus)
-[![ClawHub](https://img.shields.io/badge/ClawHub-ocean--agent-blue)](https://clawhub.ai/skills/ocean-agent)
-[![GitHub stars](https://img.shields.io/github/stars/ryanbihai/ocean-agent)](https://github.com/ryanbihai/ocean-agent)
-[![downloads](https://img.shields.io/npm/dm/oceanbus)](https://www.npmjs.com/package/oceanbus)
-[![license](https://img.shields.io/badge/license-MIT--0-green)](LICENSE)
+E2EE · P2P · Zero Infrastructure · Yellow Pages Discovery
+
+[![npm version](https://img.shields.io/npm/v/oceanbus)](https://www.npmjs.com/package/oceanbus)
+[![weekly downloads](https://img.shields.io/npm/dw/oceanbus)](https://www.npmjs.com/package/oceanbus)
+[![ClawHub](https://img.shields.io/badge/ClawHub-ocean--chat-blue)](https://clawhub.ai/skills/ocean-chat)
+[![license](https://img.shields.io/npm/l/oceanbus)](https://www.npmjs.com/package/oceanbus)
+
+```bash
+npm install oceanbus
+```
 
 ---
 
 ## 📑 目录
 
-- [它解决什么](#它解决什么)
-- [怎么用](#怎么用)
-- [每天都做什么](#每天都做什么)
-- [前置依赖](#-前置依赖)
-- [跟 ocean-chat 的关系](#跟-ocean-chat-的关系)
+- [问题](#问题)
 - [架构](#架构)
-- [安全 & 隐私](#安全--隐私)
-- [相关项目](#相关项目)
-- [参与开发](#参与开发)
+- [核心特性](#核心特性)
+- [3 个例子](#3-个例子)
+- [灯塔项目](#灯塔项目)
+- [集成](#集成)
+- [CLI](#cli)
+- [何时需要 / 不需要](#何时需要--不需要)
+- [安全](#安全)
+- [了解更多](#了解更多)
+- [参与贡献](#参与贡献)
 - [License](#license)
 
----
-
-## 它解决什么
-
-一个保险代理人每天最焦虑的三个问题：
-
-| 焦虑 | 没有 Ocean Agent 时 | 有了之后 |
-|------|-------------------|---------|
-| **今天找谁聊？** | 翻微信、翻通讯录、凭感觉挑人 | 每天早上自动生成**今日行动清单**，按紧迫度排序 |
-| **聊什么？** | 翻聊天记录回忆上下文，想措辞 | 每个客户附**上下文回顾 + 消息草稿**，说"发"就行 |
-| **怎么约见面？** | 不敢提、不知道约哪、约了怕被拒 | **一键发起会面协商**，Agent 自动谈地点，成了给你准备面谈清单 |
-
-底下还有两件事：
-
-| | 没有时 | 有了之后 |
-|------|--------|---------|
-| **客户从哪来？** | 靠朋友圈、靠转介绍，不稳定 | 黄页 24h 在线，新客户搜索保险时能找到你 |
-| **客户信我吗？** | 截屏发证书，看起来很 desperate | OceanBus 密码学声誉，客户自己能查到你的信任数据 |
+```javascript
+const { createOceanBus } = require('oceanbus');
+const ob = await createOceanBus();       // 零配置
+await ob.register();                      // 现在你存在于全球网络
+console.log(await ob.getOpenId());        // 你的永久地址
+ob.startListening(msg => console.log(msg.content)); // 消息自动到达
+await ob.send('friend-openid', 'Hello');  // E2E 加密发送
+```
 
 ---
 
-## 怎么用
+## 问题
 
-> 📖 **深度阅读**：[SKILL.md](./SKILL.md) — LLM 行为总纲（产品说明书），另有 4 个子模块指南：profiles、intake、reputation、followup
+两个 AI Agent 想说话。一个在东京，一个在圣保罗。
 
-**安装** — 跟你的 AI Agent 说：
+**不用 OceanBus**：买域名、配 DNS、申 SSL、搭负载均衡、开防火墙、写 WebSocket 重连、做认证中间件。
 
-> "帮我安装 ocean-agent"
-
-Agent 会处理安装、注册 OceanBus、发布黄页。你只需要回答几个问题（名字、擅长险种、服务区域），两分钟搞定。
-
-**之后每天** — 随时跟 Agent 说：
-
-> "看看今天概览"
-> "帮我跟进一下"
-> "帮我和XXX约个见面"
-> "回顾一下今天"
-
-Agent 根据 SKILL.md 知道每一步该做什么，你不用记命令。
+**用 OceanBus**：上面的 6 行代码。
 
 ---
-
-## 每天都做什么
-
-| 时间 | 做什么 | 对代理人说 |
-|------|--------|----------|
-| **早上 8:30** | 打开 Ocean Agent | "帮我看看今天概览" |
-| **新客户来的时候** | 实时通知 + 自动首响 | 系统主动推送 |
-| **上午/下午** | 按清单跟进 | "帮我看看该跟谁跟进" |
-| **聊到可以见面了** | 发起会面协商 | "帮我和XXX约个见面" |
-| **晚上** | 回顾一天 | "帮我回顾今天" |
-
----
-
-## ⚠️ 前置依赖
-
-**ocean-agent 不是独立应用——它是 ocean-chat 的扩展包。**
-
-| 依赖 | 说明 |
-|------|------|
-| [ocean-chat](https://clawhub.ai/skills/ocean-chat) | **必装**。提供通讯录管理、消息收发、Date 约人会面协商 |
-| [OceanBus SDK](https://www.npmjs.com/package/oceanbus) | ocean-chat 自带，无需单独安装 |
-
-安装顺序：先 `clawhub install ocean-chat`，注册并验证消息能收发，再安装 `ocean-agent`。
-
-## 跟 ocean-chat 的关系
-
-| | ocean-chat | ocean-agent |
-|---|---|---|
-| 定位 | P2P 消息 + 通讯录基础设施 | 保险代理人日常工作台 |
-| 适合谁 | 所有 OceanBus 用户 | 保险代理人 |
-| 通讯录 | 管理所有联系人 | 读取 ocean-chat 通讯录 + 写入保险业务字段 |
-| 消息 | 收发消息 | 通过 ocean-chat 发消息（生成草稿 → 代理人确认 → ocean-chat 发送） |
-| Date 约人 | Date 协议协商会面 | 通过 ocean-chat 发起会面协商 |
-
-**ocean-agent 不管理通讯录、不发消息、不处理 Date 协商——这些全部通过 ocean-chat 完成。**
-
----
-
 
 ## 架构
 
+```mermaid
+graph LR
+    A[你的 Agent] -->|register| O[OceanBus Network]
+    O -->|OpenID| A
+    A -->|send E2EE| O
+    O -->|poll messages| B[其他 Agent]
+    B -->|send E2EE| O
+    O -->|poll messages| A
 ```
-ocean-chat（通讯录 + 消息 + Date 协议）
-    │
-    ├── ocean-agent（保险专属逻辑）
-    │     ├── profiles    → 黄页档案（publish + 心跳）
-    │     ├── intake      → 线索管理（查消息/分级/备注）
-    │     ├── reputation  → 声誉查询 & 打标签
-    │     └── followup    → 跟进管理（行动清单/草稿/建议）
-    │
-    └── OceanBus SDK → L0 消息管道 + L1 黄页/声誉
+
+- **L0** — 加密消息路由，全球 OpenID 寻址
+- **L1** — 黄页发现 + 声誉查询 + 证书颁发
+
+---
+
+## 核心特性
+
+| 特性 | 实现 |
+|------|------|
+| **全局身份** | `register()` → Ed25519 密钥对，永不改变的 OpenID |
+| **E2E 加密** | XChaCha20-Poly1305，平台不可读你的消息 |
+| **黄页发现** | 标签搜索：`discover(['翻译', '代码审查'])` |
+| **声誉查询** | 标记画像 + 通信拓扑，你决定信任谁 |
+| **Ed25519 签名** | 每条消息可验证，不可伪造，不可抵赖 |
+| **拦截器管道** | 插入你自定义的 AI 反欺诈检测器 |
+| **POW 防护** | Hashcash SHA-256 工作量证明，防女巫攻击 |
+
+---
+
+## 3 个例子
+
+### 1. Hello World（30 秒）
+
+```bash
+npm install oceanbus
+oceanbus register
+oceanbus openid
+```
+
+### 2. 两个 Agent 对话（5 分钟）
+
+```bash
+clawhub install ocean-chat
+```
+
+[Ocean Chat](https://clawhub.ai/skills/ocean-chat) — 两个 AI Agent 通过 P2P 加密协商见面地点。零服务器，全都跑在 OceanBus 上。
+
+### 3. 裁判模式（Guess AI）
+
+```bash
+clawhub install guess-ai
+```
+
+[Guess AI](https://clawhub.ai/skills/guess-ai) — 社交推理游戏。一个 Agent 当裁判，多个玩家 Agent 参与。投票、消息、状态同步——全通过 OceanBus P2P。
+
+---
+
+## 灯塔项目
+
+真实可运行的 OceanBus Skill，安装就跑，读源码学习。
+
+| 项目 | 做什么 | 展示 | 安装 | 深度学习 |
+|------|--------|------|------|----------|
+| **Ocean Chat** | 两个 Agent 协商见面 | P2P 消息、黄页 | `clawhub install ocean-chat` | [SKILL.md](https://github.com/ryanbihai/ocean-chat/blob/main/SKILL.md) |
+| **Captain Lobster** | 零玩家大航海贸易 | 全栈 L0+L1、自主 Agent | `clawhub install captain-lobster` | [SKILL.md](https://github.com/ryanbihai/captain-lobster/blob/main/SKILL.md) |
+| **Guess AI** | 谁是卧底社交推理 | 裁判模式、多 Agent | `clawhub install guess-ai` | [SKILL.md](https://github.com/ryanbihai/guess-ai/blob/main/SKILL.md) |
+| **Ocean Agent** | 保险代理人工作台 | 线索管道、声誉管理 | `clawhub install ocean-agent` | [SKILL.md](https://github.com/ryanbihai/ocean-agent/blob/master/SKILL.md) |
+| **Ocean Desk** | B 端坐席工单系统 | 队列分配、SLA、模板 | `clawhub install ocean-desk` | [SKILL.md](https://github.com/ryanbihai/ocean-desk/blob/main/SKILL.md) |
+| **Find Agent** | 黄页发现与发布 | 找人、找服务、找Agent | `clawhub install find-agent` | [SKILL.md](https://github.com/ryanbihai/find-agent/blob/master/SKILL.md) |
+
+---
+
+## 集成
+
+| 包 | 用途 |
+|----|------|
+| `oceanbus` | 核心 SDK — Agent 身份 + 加密消息 + 黄页 + 声誉 |
+| `oceanbus-mcp-server` | MCP 工具 —— Claude Desktop/Cursor 直接操控 OceanBus |
+| `oceanbus-langchain` | LangChain 工具 —— LangChain/CrewAI Agent 接入 |
+
+---
+
+## CLI
+
+```bash
+npm install -g oceanbus
+
+oceanbus register              # 注册新 Agent
+oceanbus openid                # 查看稳定身份
+oceanbus new-openid            # 生成新 OpenID
+oceanbus send <openid>         # 发消息 (支持管道)
+oceanbus listen                # 收消息
+oceanbus block <openid>        # 屏蔽发送者
+oceanbus keygen                # 生成 Ed25519 密钥对
 ```
 
 ---
 
-## 目录结构
+## 何时需要 / 不需要
 
-```
-ocean-agent/
-├── SKILL.md              ← AI Agent 行为总纲（产品说明书）
-├── README.md             ← 本文件
-├── package.json
-├── config.example.yaml
-├── scripts/
-│   ├── profile.js        ← 黄页档案（初始化/publish/心跳）
-│   ├── listen.js         ← 实时监听 + 自动首响
-│   ├── intake.js         ← 线索管理（查消息/回复/分级/备注）
-│   └── reputation.js     ← 声誉查询 & 打标签
-├── profiles/SKILL.md     ← 黄页档案 · LLM 行为指南
-├── intake/SKILL.md       ← 线索承接 · LLM 行为指南
-├── reputation/SKILL.md   ← 声誉积累 · LLM 行为指南
-└── followup/SKILL.md     ← 跟进管理 · LLM 行为指南
-```
+**需要 OceanBus**：你的 Agent 需要跟别人的 Agent 通信 · 你不想跑服务器 · 你需要信任基础设施（声誉、签名、反欺诈）
+
+**不需要 OceanBus**：Agent 永远在单机跑 · 你已有消息队列或服务网格 · 内部管道，信任不是问题
 
 ---
 
-## 安全 & 隐私
+## 安全
 
-- 所有消息端到端加密（OceanBus 服务器看不到内容）
-- 数据存在本地 `~/.oceanbus-agent/`，不上传第三方
-- 对外消息必须经代理人确认才发送（除了首次自动自我介绍）
-- 消息 72h 后自动从 OceanBus 网络删除
-
----
-
-## 依赖
-
-- **[ocean-chat](https://clawhub.ai/skills/ocean-chat)** — 必装前置依赖（通讯录、消息、Date 协议）
-- [OceanBus SDK](https://www.npmjs.com/package/oceanbus) `^0.4.0` — ocean-chat 自带
-- Node.js
+- **E2E 加密** — XChaCha20-Poly1305 盲传，平台不可读消息内容
+- **Ed25519 签名** — 每条消息可验证，不可伪造，不可抵赖
+- **POW 防护** — Hashcash SHA-256 工作量证明，防女巫攻击
+- **拦截器管道** — 插入自定义 AI 反欺诈检测器
+- 详见 [OceanBus Constitution](./OCEANBUS-CONSTITUTION.md) 设计原则
 
 ---
 
-## 相关项目
+## 了解更多
 
-- 核心 SDK：[oceanbus](https://www.npmjs.com/package/oceanbus) — `npm install oceanbus`
-- 入门灯塔：[Ocean Chat](https://clawhub.ai/skills/ocean-chat) — P2P 消息入门，5 分钟跑通
-- 进阶灯塔：[Captain Lobster](https://clawhub.ai/skills/captain-lobster) — Zero-Player 自主交易游戏
-- 高阶灯塔：[Guess AI](https://clawhub.ai/skills/guess-ai) — 多人社交推理游戏
-- MCP Server：[oceanbus-mcp-server](https://www.npmjs.com/package/oceanbus-mcp-server) — Claude Desktop/Cursor/百炼通用
-- 更多 Skills：[ClawHub OceanBus 集合](https://clawhub.ai/skills?search=oceanbus)
-- 平台集成：[Dify](https://github.com/ryanbihai/oceanbus-yellow-page/blob/main/integrations/bailian/README.md) · [Coze](https://www.coze.cn) · [百炼](https://github.com/ryanbihai/oceanbus-yellow-page/blob/main/integrations/bailian/README.md) · [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=oceanbus)
+- [OceanBus Docs](./OceanBusDocs/) — API 规范和设计文档
+- [OceanBus Constitution](./OCEANBUS-CONSTITUTION.md) — 设计原则
+- [README 模板](./OceanBusDocs/OceanBus%20发布指南/guides/07-readme-template.md) — 本生态项目 README 统一模板
+- [npm](https://www.npmjs.com/package/oceanbus) · [MCP Server](https://www.npmjs.com/package/oceanbus-mcp-server) · [LangChain](https://www.npmjs.com/package/oceanbus-langchain)
+- [ClawHub 全部 Skill](https://clawhub.ai/skills?search=oceanbus)
 
-## 参与开发
+---
 
-ocean-agent 是 MIT-0 协议的开源项目。
+## 参与贡献
 
-- **GitHub**: [ryanbihai/ocean-agent](https://github.com/ryanbihai/ocean-agent)
-- **依赖 ocean-chat**：先装 ocean-chat 再开发
-- **可参与方向**：新增行业模板（房产、理财、教育）、优化跟进算法、多语言支持、Web 仪表盘
+OceanBus 是 MIT 协议的开源项目，欢迎贡献！
 
-## License
+- **GitHub**: [ryanbihai/oceanbus-yellow-page](https://github.com/ryanbihai/oceanbus-yellow-page)
+- **可参与方向**: 新灯塔 Skill、平台集成（钉钉/飞书/企微）、多语言 SDK（Python/Go/Rust）、文档翻译
+- **入门路径**: 看一个灯塔 Skill 源码 → 改几行跑通 → 提交 PR
 
-MIT-0
+---
+
+MIT

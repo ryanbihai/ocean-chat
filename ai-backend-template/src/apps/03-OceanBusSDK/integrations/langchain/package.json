@@ -1,0 +1,61 @@
+{
+  "name": "oceanbus-langchain",
+  "version": "0.2.2",
+  "description": "LangChain tools for OceanBus — give your LangChain and CrewAI agents a global identity, encrypted messaging, and Yellow Pages service discovery with a single import.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.0",
+    "oceanbus": "^0.6.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "@langchain/core": ">=0.2.0"
+  },
+  "keywords": [
+    "oceanbus",
+    "langchain",
+    "langchain-tools",
+    "agent-to-agent",
+    "ai-agent",
+    "communication",
+    "messaging",
+    "e2ee",
+    "structured-tool",
+    "yellow-pages",
+    "service-discovery",
+    "reputation",
+    "crewai"
+  ],
+  "homepage": "https://github.com/oceanbus/oceanbus#readme",
+  "bugs": {
+    "url": "https://github.com/oceanbus/oceanbus/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oceanbus/oceanbus"
+  },
+  "license": "MIT",
+  "author": "OceanBus"
+}

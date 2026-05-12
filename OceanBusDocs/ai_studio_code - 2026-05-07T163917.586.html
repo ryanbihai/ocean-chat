@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>好啦科技 - AI驱动的体检基础设施</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 极致平滑与字体 */
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; background-color: #f8fafc; transition: background-color 0.4s ease; }
+        
+        /* 隐藏滚动条但保留功能 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        /* 高级玻璃态与光晕背景 (GUI 模式专属) */
+        .gui-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -2; pointer-events: none; transition: opacity 0.4s ease; }
+        .grid-bg { position: absolute; inset: 0; background-image: linear-gradient(to right, rgba(226, 232, 240, 0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(226, 232, 240, 0.6) 1px, transparent 1px); background-size: 40px 40px; }
+        .glow-point { position: absolute; border-radius: 50%; filter: blur(80px); }
+        
+        .glass-panel { background: rgba(255, 255, 255, 0.75); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05); border-radius: 1.5rem; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .glass-panel:hover { box-shadow: 0 12px 32px -8px rgba(37, 99, 235, 0.1); transform: translateY(-2px); border-color: rgba(219, 234, 254, 0.9); }
+
+        /* 全局 Cmd+K 悬浮模态框 */
+        .cmdk-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; display: flex; align-items: flex-start; justify-content: center; padding-top: 15vh; }
+        .cmdk-overlay.active { opacity: 1; pointer-events: auto; }
+        .cmdk-modal { width: 100%; max-width: 640px; background: white; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); transform: scale(0.95); transition: transform 0.2s ease; overflow: hidden; border: 1px solid #e2e8f0; }
+        .cmdk-overlay.active .cmdk-modal { transform: scale(1); }
+
+        /* ----------------------------------- */
+        /* 双模切换核心逻辑 (God Mode) */
+        /* ----------------------------------- */
+        .cli-view { display: none; padding: 100px 40px 40px; max-width: 1000px; margin: 0 auto; }
+        
+        body.cli-mode { background-color: #050505; color: #10b981; font-family: 'SF Mono', Consolas, Menlo, monospace; }
+        body.cli-mode .gui-view, body.cli-mode .gui-layer { display: none !important; }
+        body.cli-mode .cli-view { display: block !important; animation: fadeIn 0.4s ease; }
+        
+        /* CLI 代码高亮样式 */
+        .cli-line { margin-bottom: 8px; line-height: 1.6; font-size: 14px; word-break: break-all; }
+        .json-key { color: #38bdf8; }
+        .json-string { color: #a3e635; }
+        .json-number { color: #f472b6; }
+        .json-comment { color: #6b7280; font-style: italic; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 顶部开关组件 */
+        .mode-toggle { position: relative; width: 130px; height: 36px; background: #e2e8f0; border-radius: 20px; cursor: pointer; padding: 4px; display: flex; align-items: center; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); }
+        .mode-toggle::before { content: ''; position: absolute; width: 60px; height: 28px; background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        /* 开关处于 CLI 模式下的样式 */
+        body.cli-mode .mode-toggle { background: #333; }
+        body.cli-mode .mode-toggle::before { background: #10b981; transform: translateX(62px); }
+        body.cli-mode .nav-bar { background: rgba(5, 5, 5, 0.9) !important; border-bottom-color: #333 !important; }
+        body.cli-mode .nav-logo { color: #fff !important; }
+        body.cli-mode .nav-logo span { color: #10b981 !important; }
+        
+        .mode-text { flex: 1; text-align: center; font-size: 12px; font-weight: bold; z-index: 1; transition: color 0.3s; user-select: none; }
+        .text-gui { color: #2563eb; } .text-cli { color: #94a3b8; }
+        body.cli-mode .text-gui { color: #64748b; } body.cli-mode .text-cli { color: #050505; }
+    </style>
+</head>
+<body>
+
+    <!-- GUI 模式底层视觉 -->
+    <div class="gui-layer">
+        <div class="grid-bg"></div>
+        <div class="glow-point bg-blue-500/15" style="width: 50vw; height: 50vw; top: -10%; left: -10%;"></div>
+        <div class="glow-point bg-teal-400/10" style="width: 40vw; height: 40vw; top: 50%; right: -10%;"></div>
+    </div>
+
+    <!-- 全局统一导航栏 -->
+    <nav class="nav-bar fixed w-full z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/50 transition-colors duration-300">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="nav-logo font-extrabold text-2xl text-slate-900 tracking-tight transition-colors">好啦科技<span class="text-blue-600">.</span></div>
+            
+            <!-- God Mode 核心开关 -->
+            <div class="flex items-center gap-4">
+                <div class="hidden md:block text-xs font-bold text-slate-400 tracking-widest uppercase">架构视角:</div>
+                <div class="mode-toggle" id="modeToggle">
+                    <span class="mode-text text-gui">GUI视觉</span>
+                    <span class="mode-text text-cli">CLI/API</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ========================================== -->
+    <!-- 视角 1：GUI 视觉模式 (人类友好，商业叙事) -->
+    <!-- ========================================== -->
+    <div class="gui-view">
+        
+        <!-- 首屏 Hero -->
+        <main class="pt-36 pb-20 px-6 max-w-5xl mx-auto text-center relative z-10">
+            <!-- 极客唤醒按钮 -->
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50/80 border border-blue-200 text-blue-700 text-xs font-bold mb-8 cursor-pointer hover:bg-blue-100 transition shadow-sm" onclick="openCmdK()">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                按 Cmd + K 唤醒全局智能知识库 →
+            </div>
+            
+            <h1 class="text-5xl md:text-6xl font-extrabold text-slate-900 mb-6 tracking-tight leading-[1.15]">
+                用 AI 与数据，<br>
+                <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-teal-500">重构体检基础设施。</span>
+            </h1>
+            
+            <p class="text-lg text-slate-500 mb-14 max-w-2xl mx-auto leading-relaxed font-medium">
+                彻底告别千篇一律的死套餐与孤岛报告。<br>为企业与保险机构提供从 <strong class="text-slate-800">“智能定制”、“全网直连” </strong>到<strong class="text-slate-800"> “标准数据交付”</strong> 的下一代闭环服务。
+            </p>
+
+            <!-- 找回 V7 的四大核心硬数据，采用高端 Glass 卡片 -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto mb-10">
+                <div class="glass-panel p-6 text-center">
+                    <div class="text-3xl font-black text-slate-800">3400<span class="text-xl text-blue-600">万+</span></div>
+                    <div class="text-xs text-slate-500 mt-2 font-bold tracking-wide uppercase">底层测评数据</div>
+                </div>
+                <div class="glass-panel p-6 text-center">
+                    <div class="text-3xl font-black text-slate-800">538<span class="text-xl text-teal-600">家</span></div>
+                    <div class="text-xs text-slate-500 mt-2 font-bold tracking-wide uppercase">直连优质门店</div>
+                </div>
+                <div class="glass-panel p-6 text-center">
+                    <div class="text-3xl font-black text-slate-800">241<span class="text-xl text-blue-600">城</span></div>
+                    <div class="text-xs text-slate-500 mt-2 font-bold tracking-wide uppercase">全国覆盖网络</div>
+                </div>
+                <div class="glass-panel p-6 text-center">
+                    <div class="text-3xl font-black text-slate-800">70<span class="text-xl text-teal-600">+</span></div>
+                    <div class="text-xs text-slate-500 mt-2 font-bold tracking-wide uppercase">深度合作保司</div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 差异化瀑布流 (找回 V7 内容，融入 V8 审美) -->
+        <section class="py-24 border-t border-slate-200/50 bg-white/40">
+            <div class="max-w-5xl mx-auto px-6">
+                <h2 class="text-3xl font-bold text-slate-900 mb-16 text-center">告别传统中介，全链路重构体验</h2>
+                
+                <div class="space-y-6">
+                    <!-- 差异 1 检前 -->
+                    <div class="flex flex-col md:flex-row items-center gap-8 glass-panel p-8 hover:border-blue-200">
+                        <div class="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 font-black text-2xl flex-shrink-0 shadow-sm border border-blue-100">01</div>
+                        <div class="flex-1">
+                            <div class="text-xs font-bold tracking-widest text-blue-500 mb-2 uppercase">检前阶段</div>
+                            <h3 class="text-xl font-bold text-slate-900 mb-3">AI 管家千人千面定制</h3>
+                            <p class="text-sm text-slate-500 leading-relaxed mb-3">
+                                <span class="bg-slate-100 text-slate-400 px-2 py-0.5 rounded line-through mr-2 text-xs">传统：几套固定死套餐</span>
+                                基于 3400 万数据的 AI 引擎。用户扫码 1 分钟完成画像，在预算内精准推荐专属项目，拒绝漏查与过度检查。
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- 差异 2 检中 -->
+                    <div class="flex flex-col md:flex-row items-center gap-8 glass-panel p-8 hover:border-teal-200">
+                        <div class="w-16 h-16 rounded-2xl bg-teal-50 flex items-center justify-center text-teal-600 font-black text-2xl flex-shrink-0 shadow-sm border border-teal-100">02</div>
+                        <div class="flex-1">
+                            <div class="text-xs font-bold tracking-widest text-teal-500 mb-2 uppercase">检中阶段</div>
+                            <h3 class="text-xl font-bold text-slate-900 mb-3">API 直连与专属管家履约</h3>
+                            <p class="text-sm text-slate-500 leading-relaxed mb-3">
+                                <span class="bg-slate-100 text-slate-400 px-2 py-0.5 rounded line-through mr-2 text-xs">传统：人工排期极易出错</span>
+                                深度打通全国 538 家优质门店（涵盖美年/瑞慈等）。全自动化发单，并配备专属真人管家，解决检中疑难。
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 差异 3 检后 -->
+                    <div class="flex flex-col md:flex-row items-center gap-8 glass-panel p-8 hover:border-indigo-200">
+                        <div class="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-2xl flex-shrink-0 shadow-sm border border-indigo-100">03</div>
+                        <div class="flex-1">
+                            <div class="text-xs font-bold tracking-widest text-indigo-500 mb-2 uppercase">检后阶段</div>
+                            <h3 class="text-xl font-bold text-slate-900 mb-3">结构化标准数据回传</h3>
+                            <p class="text-sm text-slate-500 leading-relaxed mb-3">
+                                <span class="bg-slate-100 text-slate-400 px-2 py-0.5 rounded line-through mr-2 text-xs">传统：只给 PDF 报告死数据</span>
+                                自主 NLP 引擎将报告 100% 清洗为标准化 JSON 字典。直接对接到企业的健康看板或保司预核保风控模型。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 找回 V7 内容：信任与客户墙 -->
+        <section class="py-24 border-t border-slate-200/50 bg-white">
+            <div class="max-w-6xl mx-auto px-6">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl font-bold text-slate-900">金融级合规底线与头部信赖</h2>
+                    <p class="text-slate-500 mt-4">每一项严苛的资质，都是让 B 端企业安心托付的基石。</p>
+                </div>
+
+                <div class="grid md:grid-cols-4 gap-6 mb-16 text-center">
+                    <div class="p-6 border border-slate-100 rounded-2xl bg-slate-50 hover:bg-white hover:shadow-lg transition">
+                        <div class="text-3xl mb-3">🔐</div>
+                        <h4 class="font-bold text-slate-800 mb-2">国家等保三级</h4>
+                        <p class="text-xs text-slate-500">非银机构最高安全标准</p>
+                    </div>
+                    <div class="p-6 border border-slate-100 rounded-2xl bg-slate-50 hover:bg-white hover:shadow-lg transition">
+                        <div class="text-3xl mb-3">📋</div>
+                        <h4 class="font-bold text-slate-800 mb-2">ISO 体系双认证</h4>
+                        <p class="text-xs text-slate-500">27001信息安全与9001质量</p>
+                    </div>
+                    <div class="p-6 border border-slate-100 rounded-2xl bg-slate-50 hover:bg-white hover:shadow-lg transition">
+                        <div class="text-3xl mb-3">🧬</div>
+                        <h4 class="font-bold text-slate-800 mb-2">精算与数据基因</h4>
+                        <p class="text-xs text-slate-500">深刻理解保险与底层数据逻辑</p>
+                    </div>
+                    <div class="p-6 border border-slate-100 rounded-2xl bg-slate-50 hover:bg-white hover:shadow-lg transition">
+                        <div class="text-3xl mb-3">🏆</div>
+                        <h4 class="font-bold text-slate-800 mb-2">40+ 知识产权</h4>
+                        <p class="text-xs text-slate-500">涵盖智能推荐系统等核心软著</p>
+                    </div>
+                </div>
+
+                <!-- 客户名单呈现 -->
+                <div class="glass-panel p-10 text-center">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">长期服务于数十家头部金融与保险机构</p>
+                    <div class="flex flex-wrap justify-center gap-x-10 gap-y-6 text-lg font-bold text-slate-400">
+                        <span class="hover:text-blue-600 transition">中国平安</span>
+                        <span class="hover:text-blue-600 transition">中国人寿</span>
+                        <span class="hover:text-blue-600 transition">太平洋保险</span>
+                        <span class="hover:text-blue-600 transition">太平人寿</span>
+                        <span class="hover:text-blue-600 transition">泰康在线</span>
+                        <span class="hover:text-blue-600 transition">阳光保险</span>
+                        <span class="hover:text-blue-600 transition">众安在线</span>
+                        <span class="hover:text-blue-600 transition">友邦保险</span>
+                        <span class="hover:text-blue-600 transition">农银人寿</span>
+                        <span class="hover:text-blue-600 transition">中信保诚</span>
+                        <span class="hover:text-blue-600 transition">国华人寿</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 体验区与底部 -->
+        <footer class="py-24 bg-slate-900 text-center relative overflow-hidden">
+            <div class="relative z-10 max-w-4xl mx-auto px-6">
+                <div class="text-blue-400 font-bold tracking-widest text-xs mb-4 uppercase">Experience Now</div>
+                <h2 class="text-3xl font-extrabold text-white mb-4">无需等待，立即体验 AI 体检管家</h2>
+                <p class="text-slate-400 mb-10 text-sm">拿出微信扫一扫，亲身感受从“智能风险画像”到“方案定制”的极速体验。</p>
+                
+                <!-- 二维码占位 -->
+                <div class="w-48 h-48 mx-auto bg-white rounded-2xl flex items-center justify-center mb-10 shadow-2xl p-2 border-4 border-slate-800 relative">
+                    <div class="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 text-sm font-bold border border-dashed border-slate-300 rounded-xl">
+                        小程序码占位
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-800 pt-8 flex flex-col md:flex-row justify-between items-center text-xs text-slate-500">
+                    <p>© 2024 北京好啦科技有限公司.</p>
+                    <p class="mt-2 md:mt-0 font-mono bg-slate-800 px-2 py-1 rounded">AI驱动的数字化体检基础设施</p>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- 视角 2：CLI / API 极客模式 (与 GUI 业务完全对应的底层数据) -->
+    <!-- ========================================== -->
+    <div class="cli-view">
+        <div class="cli-line json-comment"># System Context: Haola Tech API Layer Initialized</div>
+        <div class="cli-line json-comment"># Agent Mode: Active</div>
+        <br>
+        
+        <div class="cli-line">> GET /api/v1/metrics/core</div>
+        <div class="cli-line">{</div>
+        <div class="cli-line">  <span class="json-key">"user_data_points"</span>: <span class="json-number">34000000</span>, <span class="json-comment">// 底层测评数据</span></div>
+        <div class="cli-line">  <span class="json-key">"connected_clinics"</span>: <span class="json-number">538</span>, <span class="json-comment">// 直连优质门店</span></div>
+        <div class="cli-line">  <span class="json-key">"coverage_cities"</span>: <span class="json-number">241</span>, <span class="json-comment">// 全国网络覆盖</span></div>
+        <div class="cli-line">  <span class="json-key">"insurance_partners"</span>: <span class="json-number">70</span> <span class="json-comment">// 合作头部保司</span></div>
+        <div class="cli-line">}</div>
+        <br>
+
+        <div class="cli-line">> fetch /api/v1/business/workflow_diff</div>
+        <div class="cli-line">... Resolving workflow differentiation ...</div>
+        <div class="cli-line">  <span class="json-string">[Phase 01: PRE-EXAM]</span> -> AI Recommendation Engine bypassing static packages.</div>
+        <div class="cli-line">  <span class="json-string">[Phase 02: IN-EXAM]</span>  -> API scheduling in 538 clinics + Human Concierge.</div>
+        <div class="cli-line">  <span class="json-string">[Phase 03: POST-EXAM]</span> -> NLP Engine parses reports into 100% structured JSON.</div>
+        <br>
+
+        <div class="cli-line">> GET /api/v1/compliance/certifications</div>
+        <div class="cli-line">{</div>
+        <div class="cli-line">  <span class="json-key">"security_level"</span>: <span class="json-string">"National Grade III (Bank-Level)"</span>,</div>
+        <div class="cli-line">  <span class="json-key">"iso_certs"</span>: [<span class="json-string">"ISO27001"</span>, <span class="json-string">"ISO9001"</span>],</div>
+        <div class="cli-line">  <span class="json-key">"ip_patents"</span>: <span class="json-number">40</span></div>
+        <div class="cli-line">}</div>
+        <br>
+        
+        <div class="cli-line json-comment"># Ready for LLM crawler / Next command...</div>
+        <div class="cli-line">> <span class="animate-pulse" style="color: #fff; font-weight: bold;">_</span></div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- 全局组件：Spotlight / Cmd+K 搜索终端 -->
+    <!-- ========================================== -->
+    <div class="cmdk-overlay" id="cmdkOverlay">
+        <div class="cmdk-modal flex flex-col">
+            <div class="flex items-center px-4 py-4 border-b border-slate-100 bg-white">
+                <svg class="w-5 h-5 text-blue-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                <input type="text" id="cmdkInput" class="flex-1 text-lg border-none outline-none text-slate-800 placeholder-slate-400" placeholder="检索好啦科技知识库 (例如：体检管家, 优势...)">
+                <kbd class="hidden md:inline-block text-[10px] text-slate-400 font-mono bg-slate-100 px-2 py-1 rounded">ESC 关闭</kbd>
+            </div>
+            
+            <div class="px-4 py-3 bg-slate-50 flex gap-2 border-b border-slate-100 overflow-x-auto">
+                <button onclick="simulateAiSearch('检前管家差异化')" class="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1 rounded-full hover:text-blue-600 transition whitespace-nowrap">检前管家差异化</button>
+                <button onclick="simulateAiSearch('履约网络有哪些？')" class="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1 rounded-full hover:text-blue-600 transition whitespace-nowrap">履约网络有哪些？</button>
+                <button onclick="simulateAiSearch('合规与保司客户')" class="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1 rounded-full hover:text-blue-600 transition whitespace-nowrap">合规与保司客户</button>
+            </div>
+
+            <div class="p-4 min-h-[120px] max-h-80 overflow-y-auto bg-white" id="cmdkOutput">
+                <div class="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">AI 检索就绪</div>
+                <div class="text-sm text-slate-500 flex items-center gap-2">
+                    <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    您可以随时唤起我，查询关于好啦科技的任何底层能力。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 交互脚本 -->
+    <script>
+        // 1. 神之模式 (God Mode) 双模切换逻辑
+        const modeToggle = document.getElementById('modeToggle');
+        modeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('cli-mode');
+        });
+
+        // 2. Cmd+K 全局指令逻辑
+        const cmdkOverlay = document.getElementById('cmdkOverlay');
+        const cmdkInput = document.getElementById('cmdkInput');
+        const cmdkOutput = document.getElementById('cmdkOutput');
+
+        function openCmdK() {
+            cmdkOverlay.classList.add('active');
+            setTimeout(() => cmdkInput.focus(), 50);
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeCmdK() {
+            cmdkOverlay.classList.remove('active');
+            document.body.style.overflow = 'auto';
+            cmdkInput.value = '';
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                cmdkOverlay.classList.contains('active') ? closeCmdK() : openCmdK();
+            }
+            if (e.key === 'Escape' && cmdkOverlay.classList.contains('active')) {
+                closeCmdK();
+            }
+        });
+
+        cmdkOverlay.addEventListener('click', (e) => {
+            if (e.target === cmdkOverlay) closeCmdK();
+        });
+
+        // 3. 模拟高级 AI 语义搜索
+        window.simulateAiSearch = function(query) {
+            cmdkInput.value = query;
+            processAiSearch(query);
+        };
+
+        cmdkInput.addEventListener('input', (e) => {
+            processAiSearch(e.target.value);
+        });
+
+        function processAiSearch(val) {
+            if(!val.trim()) {
+                cmdkOutput.innerHTML = `<div class="text-sm text-slate-500">等待输入指令...</div>`;
+                return;
+            }
+
+            cmdkOutput.innerHTML = `
+                <div class="flex items-center gap-2 text-sm text-blue-600 font-medium">
+                    <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    正在检索底层知识库...
+                </div>
+            `;
+
+            setTimeout(() => {
+                const lowerVal = val.toLowerCase();
+                let resultHtml = '';
+
+                if(lowerVal.includes('管家') || lowerVal.includes('检前') || lowerVal.includes('差异')) {
+                    resultHtml = `
+                        <div class="text-slate-800 text-sm leading-relaxed">
+                            <strong class="text-blue-600 block mb-1">【检前定制差异化】</strong>
+                            我们抛弃了传统的“固定死套餐”。基于 3400 万测评数据构建的 AI 大脑，用户仅需扫码花1分钟完成风险画像，系统即可在预算内智能推荐千人千面的专属体检组合，有效避免漏查。
+                        </div>`;
+                } else if(lowerVal.includes('网络') || lowerVal.includes('履约') || lowerVal.includes('门店')) {
+                    resultHtml = `
+                        <div class="text-slate-800 text-sm leading-relaxed">
+                            <strong class="text-blue-600 block mb-1">【履约网络数据】</strong>
+                            API 深度直连全国 <strong class="text-black">241 城、538 家</strong> 优质实体门店（含美年、瑞慈等）。支持系统级自动化排期与一键发单，同时配备专属真人管家保障服务温度。
+                        </div>`;
+                } else if(lowerVal.includes('合规') || lowerVal.includes('资质') || lowerVal.includes('保司')) {
+                    resultHtml = `
+                        <div class="text-slate-800 text-sm leading-relaxed">
+                            <strong class="text-blue-600 block mb-1">【客户背书与合规】</strong>
+                            长期服务于 70+ 头部金融机构（中国平安、人寿、太保等）。拥有银行级的数据防护能力，包括：<strong class="text-black">国家等保三级认证、ISO 27001/9001 双认证、40+ 知识产权专利</strong>。
+                        </div>`;
+                } else {
+                    resultHtml = `<div class="text-slate-500 text-sm italic">知识库中已定位相关模块，建议您关闭搜索框，向下滚动查阅图文详情，或点击底部的“扫码体验”亲自测试。</div>`;
+                }
+
+                cmdkOutput.innerHTML = `
+                    <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                        ${resultHtml}
+                    </div>
+                `;
+            }, 300);
+        }
+    </script>
+</body>
+</html>

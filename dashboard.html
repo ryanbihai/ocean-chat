@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OceanBus 数据看板</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 8px; color: #f0f6fc; }
+  .subtitle { font-size: 13px; color: #8b949e; margin-bottom: 24px; }
+  .config-bar {
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 16px; margin-bottom: 24px;
+  }
+  .config-field { display: flex; flex-direction: column; gap: 4px; }
+  .config-field label { font-size: 12px; color: #8b949e; }
+  .config-field input {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    color: #c9d1d9; padding: 6px 10px; font-size: 13px; width: 280px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .config-field input:focus { outline: none; border-color: #58a6ff; }
+  button {
+    background: #238636; border: 1px solid #2ea043; color: #fff;
+    border-radius: 6px; padding: 7px 16px; font-size: 13px; cursor: pointer;
+    font-weight: 500; white-space: nowrap;
+  }
+  button:hover { background: #2ea043; }
+  button:active { background: #238636; }
+  button.secondary { background: #21262d; border-color: #30363d; color: #c9d1d9; }
+  button.secondary:hover { background: #30363d; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px; }
+  .card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 14px 18px; border-bottom: 1px solid #30363d;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .card-header h2 { font-size: 15px; font-weight: 600; color: #f0f6fc; }
+  .card-header .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 12px;
+    background: #1f6feb22; color: #58a6ff; border: 1px solid #1f6feb44;
+  }
+  .card-body { padding: 14px 18px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 4px; font-size: 13px; }
+  th { color: #8b949e; font-weight: 500; border-bottom: 1px solid #21262d; }
+  td { border-bottom: 1px solid #0d1117; }
+  tr:last-child td { border-bottom: none; }
+  .value { font-variant-numeric: tabular-nums; font-weight: 600; color: #f0f6fc; }
+  .value.highlight { color: #7ee787; }
+  .muted { color: #8b949e; font-size: 12px; }
+  .error { color: #f85149; font-size: 12px; }
+  .loading { color: #8b949e; font-size: 13px; }
+  .last-updated { font-size: 12px; color: #484f58; margin-top: 20px; text-align: right; }
+
+  .stat-row { display: flex; gap: 32px; margin-bottom: 12px; }
+  .stat-num { font-size: 28px; font-weight: 700; color: #7ee787; }
+  .stat-lbl { font-size: 11px; color: #8b949e; margin-top: 2px; }
+
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .bar-row .day { font-size: 11px; color: #8b949e; width: 50px; text-align: right; flex-shrink: 0; }
+  .bar-row .bar-fill {
+    height: 18px; border-radius: 3px; background: linear-gradient(90deg, #1f6feb, #58a6ff);
+    min-width: 2px; transition: width 0.3s ease;
+    display: flex; align-items: center; padding-left: 6px;
+    font-size: 11px; color: #fff; white-space: nowrap;
+  }
+  .repo-section { margin-bottom: 20px; }
+  .repo-section h3 { font-size: 14px; font-weight: 600; color: #f0f6fc; margin-bottom: 8px; }
+
+  .platform-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid #0d1117; }
+  .platform-row:last-child { border-bottom: none; }
+  .platform-name { font-weight: 600; color: #f0f6fc; min-width: 80px; }
+  .platform-status { font-size: 12px; padding: 2px 10px; border-radius: 10px; }
+  .status-live { background: #2ea04322; color: #7ee787; border: 1px solid #2ea04344; }
+  .status-pending { background: #f39c1222; color: #f39c12; border: 1px solid #f39c1244; }
+  .status-guide { background: #1f6feb22; color: #58a6ff; border: 1px solid #1f6feb44; }
+  .platform-detail { font-size: 11px; color: #8b949e; }
+
+  a.skill-link { color: #58a6ff; text-decoration: none; }
+  a.skill-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>OceanBus 数据看板</h1>
+<p class="subtitle">ClawHub · GitHub · npm · 龙虾船长 · OceanBus 五端数据聚合</p>
+
+<div class="config-bar">
+  <div class="config-field">
+    <label>GitHub Token（需要 repo scope）</label>
+    <input type="password" id="ghToken" placeholder="ghp_xxx 或 gho_xxx">
+  </div>
+  <div class="config-field">
+    <label>ClawHub Token</label>
+    <input type="password" id="chToken" placeholder="clh_xxx">
+  </div>
+  <div class="config-field">
+    <label>OceanBus API Key（运营数据）</label>
+    <input type="password" id="obToken" placeholder="sk_live_xxx">
+  </div>
+  <button onclick="saveTokens()">保存</button>
+  <button class="secondary" onclick="refreshAll()">刷新全部</button>
+</div>
+
+<div class="grid">
+  <!-- ClawHub -->
+  <div class="card" id="clawhub-card">
+    <div class="card-header">
+      <h2>ClawHub 下载量</h2>
+      <span class="badge">累积 / 今日 / 日均</span>
+    </div>
+    <div class="card-body" id="clawhub-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+
+  <!-- GitHub -->
+  <div class="card" id="github-card">
+    <div class="card-header">
+      <h2>GitHub Clone 数量</h2>
+      <span class="badge">累积 / 今日 / 日均</span>
+    </div>
+    <div class="card-body" id="github-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+
+  <!-- npm -->
+  <div class="card" id="npm-card">
+    <div class="card-header">
+      <h2>npm 安装量</h2>
+      <span class="badge">累积 / 今日 / 日均</span>
+    </div>
+    <div class="card-body" id="npm-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+
+  <!-- 插件调用 (Dify + Coze) -->
+  <div class="card" id="plugin-card">
+    <div class="card-header">
+      <h2>插件调用 (Dify + Coze)</h2>
+      <span class="badge">L1Proxy / L0</span>
+    </div>
+    <div class="card-body" id="dify-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+
+  <!-- 龙虾船长 -->
+  <div class="card" id="network-card">
+    <div class="card-header">
+      <h2>龙虾船长</h2>
+      <span class="badge">24h 活跃 · 玩家 · 交易</span>
+    </div>
+    <div class="card-body" id="network-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+
+  <!-- OceanBus -->
+  <div class="card" id="traffic-card">
+    <div class="card-header">
+      <h2>OceanBus</h2>
+      <span class="badge">累积 / 今日 / 日均</span>
+    </div>
+    <div class="card-body" id="traffic-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+
+  <!-- MCP 使用量 -->
+          <div class="card" id="mcp-card">
+            <div class="card-header">
+              <h2>MCP 使用量</h2>
+              <span class="badge">遥测上报</span>
+            </div>
+            <div class="card-body" id="mcp-body">
+              <p class="loading">加载中...</p>
+            </div>
+          </div>
+
+          <!-- 平台分布 -->
+  <div class="card" id="platform-card">
+    <div class="card-header">
+      <h2>平台分布</h2>
+      <span class="badge">6 渠道</span>
+    </div>
+    <div class="card-body" id="platform-body">
+      <p class="loading">加载中...</p>
+    </div>
+  </div>
+</div>
+
+<p class="last-updated" id="lastUpdated"></p>
+
+<script>
+// --- Config ---
+const CLAWHUB_SKILLS = [
+  'health-checkup-recommender',
+  'captain-lobster',
+  'china-top-doctor-referral',
+  'my-companion',
+  'chinese-interest-rate',
+  'ocean-chat',
+  'ocean-agent',
+  'guess-ai',
+  'ocean-desk',
+  'find-agent',
+];
+const GITHUB_REPOS = [
+  { owner: 'ryanbihai', repo: 'ocean-chat', label: 'ocean-chat' },
+  { owner: 'ryanbihai', repo: 'ocean-agent', label: 'ocean-agent' },
+  { owner: 'ryanbihai', repo: 'captain-lobster', label: 'captain-lobster' },
+  { owner: 'ryanbihai', repo: 'health-checkup-recommender', label: 'health-checkup-recommender' },
+  { owner: 'ryanbihai', repo: 'guess-ai', label: 'guess-ai' },
+  { owner: 'ryanbihai', repo: 'ocean-desk', label: 'ocean-desk' },
+  { owner: 'ryanbihai', repo: 'find-agent', label: 'find-agent' },
+];
+const NPM_PACKAGES = ['oceanbus', 'oceanbus-mcp-server', 'oceanbus-langchain'];
+const GH_DAYS = 14;
+const PUBLIC_API = 'http://39.106.168.88:17019/api/public';
+
+// --- Token Management ---
+function getTokens() {
+  return {
+    gh: document.getElementById('ghToken').value || localStorage.getItem('gh_token') || '',
+    ch: document.getElementById('chToken').value || localStorage.getItem('ch_token') || '',
+    ob: document.getElementById('obToken').value || localStorage.getItem('ob_token') || '',
+  };
+}
+
+function saveTokens() {
+  const gh = document.getElementById('ghToken').value;
+  const ch = document.getElementById('chToken').value;
+  const ob = document.getElementById('obToken').value;
+  if (gh) localStorage.setItem('gh_token', gh);
+  if (ch) localStorage.setItem('ch_token', ch);
+  if (ob) localStorage.setItem('ob_token', ob);
+  refreshAll();
+}
+
+function loadTokens() {
+  const gh = localStorage.getItem('gh_token') || '';
+  const ch = localStorage.getItem('ch_token') || '';
+  const ob = localStorage.getItem('ob_token') || '';
+  document.getElementById('ghToken').value = gh;
+  document.getElementById('chToken').value = ch;
+  document.getElementById('obToken').value = ob;
+}
+
+// --- API Helpers ---
+function clawhubUrl(slug) {
+  return `https://clawhub.ai/skills/${slug}`;
+}
+
+async function fetchClawHub(slug, token) {
+  const res = await fetch(`https://clawhub.ai/api/v1/skills/${slug}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return { stats: data.skill.stats, displayName: data.skill.displayName };
+}
+
+async function fetchGitHubClones(owner, repo, token) {
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/traffic/clones`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchNpmDownloads(pkg) {
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - 6);
+  const endStr = end.toISOString().slice(0, 10);
+  const startStr = start.toISOString().slice(0, 10);
+
+  const res = await fetch(
+    `https://api.npmjs.org/downloads/range/${startStr}:${endStr}/${pkg}`
+  );
+  if (res.status === 404) {
+    const downloads = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      downloads.push({ day: d.toISOString().slice(0, 10), downloads: 0 });
+    }
+    return { start: startStr, end: endStr, package: pkg, downloads };
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchNpmAllTime(pkg) {
+  const end = todayStr();
+  const res = await fetch(`https://api.npmjs.org/downloads/point/2015-01-01:${end}/${pkg}`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.downloads;
+}
+
+async function fetchNetworkStats() {
+  const res = await fetch(`${PUBLIC_API}/stats`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchNetworkGrowth(token) {
+  if (!token) return null;
+  const L0 = 'https://ai-t.ihaola.com.cn/api/l0';
+  const h = { Authorization: `Bearer ${token}` };
+  const [r1, r2, r3] = await Promise.allSettled([
+    fetch(`${L0}/internal/dashboard/registrations?period=day`, { headers: h }),
+    fetch(`${L0}/internal/dashboard/activity?period=day`, { headers: h }),
+    fetch(`${L0}/internal/dashboard/messages?period=day`, { headers: h }),
+  ]);
+  return {
+    registrations: r1.status === 'fulfilled' && r1.value.ok ? (await r1.value.json()).data || [] : [],
+    activity: r2.status === 'fulfilled' && r2.value.ok ? (await r2.value.json()).data || [] : [],
+    messages: r3.status === 'fulfilled' && r3.value.ok ? (await r3.value.json()).data || [] : [],
+  };
+}
+
+async function fetchPlatformStatus() {
+  const results = [];
+  try {
+    const prRes = await fetch('https://api.github.com/repos/langgenius/dify-plugins/pulls/2369');
+    if (prRes.ok) {
+      const pr = await prRes.json();
+      results.push({
+        name: 'Dify',
+        status: pr.state === 'open' ? 'pending' : 'live',
+        detail: `PR #2369 ${pr.state === 'open' ? '审核中' : pr.merged ? '已合并' : pr.state}`,
+        url: 'https://github.com/langgenius/dify-plugins/pull/2369',
+        tools: 7
+      });
+    }
+  } catch (e) { results.push({ name: 'Dify', status: 'pending', detail: 'PR #2369', tools: 7 }); }
+
+  results.push({ name: 'Coze', status: 'live', detail: '已发布 · 4 工具', tools: 4 });
+
+  try {
+    const mcpRes = await fetch('https://registry.modelcontextprotocol.io/v0.1/servers?search=oceanbus');
+    if (mcpRes.ok) {
+      const mcpData = await mcpRes.json();
+      if (mcpData.servers && mcpData.servers.length > 0) {
+        const s = mcpData.servers[0].server;
+        results.push({
+          name: 'MCP Registry',
+          status: 'live',
+          detail: `v${s.version} · 官方注册表`,
+          url: `https://registry.modelcontextprotocol.io/v0.1/servers?search=oceanbus`,
+          tools: 7
+        });
+      } else {
+        results.push({ name: 'MCP Registry', status: 'pending', detail: '提交中...', tools: 7 });
+      }
+    }
+  } catch (e) { results.push({ name: 'MCP Registry', status: 'pending', detail: 'v0.1.5 已发布' }); }
+
+  results.push({ name: '百炼', status: 'guide', detail: 'MCP 接入指南', tools: 7 });
+
+  return results;
+}
+
+// --- Daily helpers ---
+function todayStr() {
+  const d = new Date();
+  return d.toISOString().slice(0, 10);
+}
+
+function calcDailyStats(dailyArray, getDate, getCount, todayOverride) {
+  if (!dailyArray || !dailyArray.length) return { total: 0, today: 0, avg: 0, days: 0 };
+  const today = todayOverride || todayStr();
+  let total = 0;
+  let todayVal = 0;
+  let days = 0;
+  for (const d of dailyArray) {
+    const date = getDate(d);
+    const count = getCount(d);
+    if (date && count != null) {
+      total += count;
+      days++;
+      if (date === today) todayVal = count;
+    }
+  }
+  return { total, today: todayVal, avg: days > 0 ? Math.round(total / days) : 0, days };
+}
+
+// --- ClawHub daily snapshot (localStorage) ---
+const CH_SNAPSHOT_KEY = 'ch_daily_snapshots';
+
+function getChSnapshots() {
+  try { return JSON.parse(localStorage.getItem(CH_SNAPSHOT_KEY)) || {}; } catch { return {}; }
+}
+
+function saveChSnapshots(snapshots) {
+  const dates = Object.keys(snapshots).sort();
+  while (dates.length > 90) { delete snapshots[dates.shift()]; }
+  localStorage.setItem(CH_SNAPSHOT_KEY, JSON.stringify(snapshots));
+}
+
+function computeChDaily(cumulativeBySlug) {
+  const snapshots = getChSnapshots();
+  const today = todayStr();
+
+  if (!snapshots[today]) {
+    snapshots[today] = { ...cumulativeBySlug };
+    saveChSnapshots(snapshots);
+  }
+
+  const dates = Object.keys(snapshots).sort();
+  const result = {};
+
+  for (const [slug, cumulative] of Object.entries(cumulativeBySlug)) {
+    const baseline = snapshots[today][slug];
+    const todayDl = baseline != null ? Math.max(0, cumulative - baseline) : 0;
+
+    let totalDelta = 0;
+    let dayCount = 0;
+    for (let i = 1; i < dates.length; i++) {
+      const prev = snapshots[dates[i - 1]][slug];
+      const curr = snapshots[dates[i]][slug];
+      if (prev != null && curr != null) {
+        totalDelta += Math.max(0, curr - prev);
+        dayCount++;
+      }
+    }
+    result[slug] = { today: todayDl, avg: dayCount > 0 ? Math.round(totalDelta / dayCount) : null };
+  }
+  return result;
+}
+
+// --- npm daily snapshot (localStorage) ---
+const NPM_SNAPSHOT_KEY = 'npm_daily_snapshots';
+
+function getNpmSnapshots() {
+  try { return JSON.parse(localStorage.getItem(NPM_SNAPSHOT_KEY)) || {}; } catch { return {}; }
+}
+
+function mergeNpmDaily(pkgDailyData) {
+  const snapshots = getNpmSnapshots();
+  for (const [pkg, daily] of Object.entries(pkgDailyData)) {
+    if (!snapshots[pkg]) snapshots[pkg] = {};
+    for (const [date, count] of Object.entries(daily)) {
+      snapshots[pkg][date] = count;
+    }
+  }
+  const dates = Object.keys(snapshots).sort();
+  while (dates.length > 90) { delete snapshots[dates.shift()]; }
+  localStorage.setItem(NPM_SNAPSHOT_KEY, JSON.stringify(snapshots));
+}
+
+function computeNpmStats(pkg, todayCount) {
+  const snapshots = getNpmSnapshots();
+  const pkgData = snapshots[pkg] || {};
+  const dates = Object.keys(pkgData).sort();
+  let cumulative = 0;
+  for (const d of dates) { cumulative += pkgData[d]; }
+  const avg = dates.length > 0 ? Math.round(cumulative / dates.length) : null;
+  return { cumulative, today: todayCount, avg };
+}
+
+// --- Render ---
+function renderClawHub(results, dailyStats) {
+  const body = document.getElementById('clawhub-body');
+  if (results.errors.length === CLAWHUB_SKILLS.length) {
+    body.innerHTML = `<p class="error">全部请求失败。请检查 Token 是否正确。</p>`;
+    return;
+  }
+  const sorted = [...results.data].sort((a, b) => b.stats.downloads - a.stats.downloads);
+  let html = `<table>
+    <thead><tr><th>Skill</th><th>累积下载</th><th>今日下载</th><th>历史日均下载</th></tr></thead><tbody>`;
+  for (const r of sorted) {
+    const ds = (dailyStats || {})[r.slug];
+    const today = ds ? ds.today.toLocaleString() : '—';
+    const avg = (ds && ds.avg != null) ? ds.avg.toLocaleString() : '—';
+    html += `<tr>
+      <td class="value"><a class="skill-link" href="${clawhubUrl(r.slug)}" target="_blank">${r.displayName}</a></td>
+      <td class="value highlight">${r.stats.downloads.toLocaleString()}</td>
+      <td class="value">${today}</td>
+      <td class="value">${avg}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  if (results.errors.length) {
+    html += `<p class="error" style="margin-top:8px">部分失败: ${results.errors.join(', ')}</p>`;
+  }
+  body.innerHTML = html;
+}
+
+function renderGitHub(results) {
+  const body = document.getElementById('github-body');
+  if (results.errors.length === GITHUB_REPOS.length) {
+    body.innerHTML = `<p class="error">全部请求失败。请检查 Token 是否有 repo 权限。</p>`;
+    return;
+  }
+  const sorted = [...results.data].sort((a, b) => b.clones.count - a.clones.count);
+  let html = `<table>
+    <thead><tr><th>Skill</th><th>累积 Clone</th><th>今日 Clone</th><th>历史日均 Clone</th></tr></thead><tbody>`;
+  for (const r of sorted) {
+    const clonesArr = r.clones.clones;
+    const latestDate = clonesArr.length ? clonesArr[clonesArr.length - 1].timestamp.slice(0, 10) : todayStr();
+    const daily = calcDailyStats(clonesArr, d => d.timestamp.slice(0, 10), d => d.count, latestDate);
+    html += `<tr>
+      <td class="value"><a class="skill-link" href="https://github.com/${r.owner}/${r.repo}" target="_blank">${r.label}</a></td>
+      <td class="value highlight">${r.clones.count.toLocaleString()}</td>
+      <td class="value">${daily.today.toLocaleString()}</td>
+      <td class="value">${daily.avg.toLocaleString()}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  if (results.errors.length) {
+    html += `<p class="error" style="margin-top:8px">部分失败: ${results.errors.join(', ')}</p>`;
+  }
+  body.innerHTML = html;
+}
+
+function renderNpm(results, npmStats) {
+  const body = document.getElementById('npm-body');
+  if (results.errors.length === NPM_PACKAGES.length) {
+    body.innerHTML = `<p class="error">全部请求失败。npm API 可能暂时不可用。</p>`;
+    return;
+  }
+  const sorted = [...results.data].sort((a, b) => {
+    const sa = (npmStats || {})[a.pkg];
+    const sb = (npmStats || {})[b.pkg];
+    return (sb ? sb.cumulative : 0) - (sa ? sa.cumulative : 0);
+  });
+  let html = `<table>
+    <thead><tr><th>包名</th><th>累积安装</th><th>今日安装</th><th>历史日均安装</th></tr></thead><tbody>`;
+  for (const r of sorted) {
+    const stats = (npmStats || {})[r.pkg] || {};
+    const total = stats.cumulative != null ? stats.cumulative.toLocaleString() : '—';
+    const today = stats.today != null ? stats.today.toLocaleString() : '—';
+    const avg = stats.avg != null ? stats.avg.toLocaleString() : '—';
+    html += `<tr>
+      <td class="value">${r.pkg}</td>
+      <td class="value highlight">${total}</td>
+      <td class="value">${today}</td>
+      <td class="value">${avg}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  if (results.errors.length) {
+    html += `<p class="error" style="margin-top:8px">部分失败: ${results.errors.join(', ')}</p>`;
+  }
+  body.innerHTML = html;
+}
+
+function renderDify(result) {
+  const body = document.getElementById('dify-body');
+  if (result.error) {
+    body.innerHTML = `<p class="error">L1Proxy 不可达: ${result.error}</p>`;
+    return;
+  }
+  const { uptime_ms, counters } = result.data;
+  const uptimeMin = Math.round(uptime_ms / 60000);
+  const labels = {
+    'yellow-pages-discover': 'Yellow Pages 发现',
+    'reputation-query': '声誉查询',
+  };
+  let html = `<div class="stat-row">
+    <div><div class="stat-num">${uptimeMin}</div><div class="stat-lbl">运行分钟</div></div>
+  </div>
+  <table>
+    <thead><tr><th>工具</th><th>调用次数</th><th>最近调用</th></tr></thead><tbody>`;
+  for (const [key, label] of Object.entries(labels)) {
+    const c = counters[key] || { count: 0, last: null };
+    const lastStr = c.last ? new Date(c.last).toLocaleString('zh-CN') : '—';
+    html += `<tr>
+      <td class="value">${label}</td>
+      <td class="value highlight">${c.count.toLocaleString()}</td>
+      <td class="muted">${lastStr}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+function renderNetwork(result) {
+  const body = document.getElementById('network-body');
+  if (result.error) {
+    body.innerHTML = `<p class="error">数据不可达: ${result.error}</p>`;
+    return;
+  }
+  const d = (result && result.data) ? result.data : {};
+  const lobster = d.lobster || {};
+  const eco = lobster.economy || {};
+
+  let html = `<div class="stat-row">
+    <div><div class="stat-num">${lobster.players?.active24h || 0}</div><div class="stat-lbl">24h 活跃</div></div>
+    <div><div class="stat-num">${lobster.players?.total || 0}</div><div class="stat-lbl">玩家人数</div></div>
+    <div><div class="stat-num">${eco.totalTrades24h || 0}</div><div class="stat-lbl">24h 交易笔数</div></div>
+  </div>`;
+
+  body.innerHTML = html;
+}
+
+function renderMessageTraffic(growth) {
+  const body = document.getElementById('traffic-body');
+  if (!growth) {
+    body.innerHTML = '<p class="muted">请填入 OceanBus API Key</p>';
+    return;
+  }
+  const { messages, registrations, activity } = growth;
+  if (!messages.length && !activity.length && !registrations.length) {
+    body.innerHTML = '<p class="muted">暂无数据。L0 API 返回空。</p>';
+    return;
+  }
+
+  const regStats = calcDailyStats(registrations, d => d.date, d => d.count);
+  const actStats = calcDailyStats(activity, d => d.date, d => d.count);
+  const msgStats = calcDailyStats(messages, d => d.date, d => d.count);
+
+  let html = `<table>
+    <thead><tr><th>指标</th><th>累积</th><th>今日</th><th>历史日均</th></tr></thead><tbody>
+    <tr>
+      <td class="value">注册数</td>
+      <td class="value highlight">${regStats.total.toLocaleString()}</td>
+      <td class="value">${regStats.today.toLocaleString()}</td>
+      <td class="value">${regStats.avg.toLocaleString()}</td>
+    </tr>
+    <tr>
+      <td class="value">活跃 Agent</td>
+      <td class="value highlight">${actStats.total.toLocaleString()}</td>
+      <td class="value">${actStats.today.toLocaleString()}</td>
+      <td class="value">${actStats.avg.toLocaleString()}</td>
+    </tr>
+    <tr>
+      <td class="value">消息数</td>
+      <td class="value highlight">${msgStats.total.toLocaleString()}</td>
+      <td class="value">${msgStats.today.toLocaleString()}</td>
+      <td class="value">${msgStats.avg.toLocaleString()}</td>
+    </tr>
+  </tbody></table>`;
+
+  body.innerHTML = html;
+}
+
+async function fetchMCPTelemetry() {
+  const res = await fetch(PUBLIC_API + '/telemetry');
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+function renderMCPTelemetry(result) {
+  const body = document.getElementById('mcp-body');
+  if (result.error) {
+    body.innerHTML = '<p class="error">遥测不可达: ' + result.error + '</p>';
+    return;
+  }
+  const d = result.data || {};
+  const summary = d.summary || {};
+  if (Object.keys(summary).length === 0) {
+    body.innerHTML = '<p class="muted">暂无遥测数据。安装 oceanbus-mcp-server@0.1.6+ 后自动上报。</p>';
+    return;
+  }
+  let h = '';
+  for (const [source, s] of Object.entries(summary)) {
+    h += '<div class="repo-section"><h3>' + source + '</h3>';
+    h += '<div class="stat-row">' +
+      '<div><div class="stat-num">' + (s.total_invocations||0).toLocaleString() + '</div><div class="stat-lbl">累计调用</div></div>' +
+      '<div><div class="stat-num">' + (s.reports||0) + '</div><div class="stat-lbl">上报次数</div></div>' +
+      '<div><div class="stat-num">' + (s.last_date||'—') + '</div><div class="stat-lbl">最近上报</div></div>' +
+      '</div>';
+    const tools = Object.entries(s.tool_counts||{}).sort((a,b) => b[1] - a[1]);
+    if (tools.length) {
+      h += '<table><thead><tr><th>工具</th><th>调用次数</th></tr></thead><tbody>';
+      for (const [tool, count] of tools) {
+        h += '<tr><td class="value">' + tool + '</td><td class="value highlight">' + count.toLocaleString() + '</td></tr>';
+      }
+      h += '</tbody></table>';
+    }
+    h += '</div>';
+  }
+  body.innerHTML = h;
+}
+
+function renderPlatform(results) {
+  const body = document.getElementById('platform-body');
+  const statusLabels = { live: '已发布', pending: '待审核', guide: '指南就绪' };
+  const statusClasses = { live: 'status-live', pending: 'status-pending', guide: 'status-guide' };
+  let html = '';
+  for (const p of results) {
+    const link = p.url ? `<a href="${p.url}" target="_blank" style="color:#58a6ff;text-decoration:none">↗</a>` : '';
+    html += `<div class="platform-row">
+      <span class="platform-name">${p.name} ${link}</span>
+      <span>
+        <span class="platform-status ${statusClasses[p.status] || 'status-guide'}">${statusLabels[p.status] || p.status}</span>
+        <span class="platform-detail" style="margin-left:8px">${p.detail} · ${p.tools} 工具</span>
+      </span>
+    </div>`;
+  }
+  body.innerHTML = html;
+}
+
+// --- Main ---
+async function refreshAll() {
+  const tokens = getTokens();
+  const now = new Date().toLocaleString('zh-CN');
+
+  // ClawHub
+  const chResults = { data: [], errors: [] };
+  let chDaily = {};
+  if (tokens.ch) {
+    for (const slug of CLAWHUB_SKILLS) {
+      try {
+        const result = await fetchClawHub(slug, tokens.ch);
+        chResults.data.push({ slug, ...result });
+      } catch (e) {
+        chResults.errors.push(slug);
+      }
+    }
+    // Compute daily stats from localStorage snapshots
+    const cumulativeBySlug = {};
+    for (const r of chResults.data) {
+      cumulativeBySlug[r.slug] = r.stats.downloads;
+    }
+    chDaily = Object.keys(cumulativeBySlug).length ? computeChDaily(cumulativeBySlug) : {};
+  } else {
+    document.getElementById('clawhub-body').innerHTML = `<p class="muted">请填入 ClawHub Token</p>`;
+  }
+  if (chResults.data.length || chResults.errors.length) renderClawHub(chResults, chDaily);
+
+  // GitHub
+  const ghResults = { data: [], errors: [] };
+  if (tokens.gh) {
+    for (const repo of GITHUB_REPOS) {
+      try {
+        const clones = await fetchGitHubClones(repo.owner, repo.repo, tokens.gh);
+        ghResults.data.push({ ...repo, clones });
+      } catch (e) {
+        ghResults.errors.push(repo.label);
+      }
+    }
+  } else {
+    document.getElementById('github-body').innerHTML = `<p class="muted">请填入 GitHub Token</p>`;
+  }
+  if (ghResults.data.length || ghResults.errors.length) renderGitHub(ghResults);
+
+  // npm (no auth needed)
+  const npmResults = { data: [], errors: [] };
+  const npmPkgDaily = {};
+  const npmAllTimePromises = NPM_PACKAGES.map(async pkg => {
+    try {
+      const [dailyData, allTime] = await Promise.all([
+        fetchNpmDownloads(pkg),
+        fetchNpmAllTime(pkg)
+      ]);
+      npmResults.data.push({ pkg, data: dailyData, allTime });
+      const daily = {};
+      for (const d of dailyData.downloads) { daily[d.day] = d.downloads; }
+      npmPkgDaily[pkg] = daily;
+    } catch (e) {
+      npmResults.errors.push(pkg);
+    }
+  });
+  await Promise.allSettled(npmAllTimePromises);
+  // Merge daily data into persistent snapshots
+  if (Object.keys(npmPkgDaily).length) {
+    mergeNpmDaily(npmPkgDaily);
+  }
+  // Build stats: cumulative from npm all-time API, today from range API, avg from localStorage
+  const npmStats = {};
+  for (const r of npmResults.data) {
+    const downloads = r.data.downloads;
+    let todayVal = 0;
+    if (downloads.length) {
+      todayVal = downloads[downloads.length - 1].downloads;
+      // If latest day shows 0, npm may not have finished counting today → use previous day
+      if (todayVal === 0 && downloads.length > 1) {
+        todayVal = downloads[downloads.length - 2].downloads;
+      }
+    }
+    const lsStats = computeNpmStats(r.pkg, todayVal);
+    npmStats[r.pkg] = {
+      cumulative: r.allTime != null ? r.allTime : lsStats.cumulative,
+      today: todayVal,
+      avg: lsStats.avg
+    };
+  }
+  renderNpm(npmResults, npmStats);
+
+  // Dify L1Proxy
+  const L1PROXY_URL = 'http://39.106.168.88:17019/api/l1-proxy';
+  try {
+    const res = await fetch(`${L1PROXY_URL}/stats`);
+    if (res.ok) renderDify(await res.json());
+    else renderDify({ error: `HTTP ${res.status}` });
+  } catch (e) {
+    renderDify({ error: e.message });
+  }
+
+  // 龙虾船长
+  try {
+    const netData = await fetchNetworkStats();
+    renderNetwork(netData);
+  } catch (e) {
+    renderNetwork({ error: e.message });
+  }
+
+  // OceanBus 消息流量
+  let growthData = null;
+  if (tokens.ob) {
+    try { growthData = await fetchNetworkGrowth(tokens.ob); } catch {}
+  }
+  renderMessageTraffic(growthData);
+
+  // MCP Telemetry
+  try {
+    const mcpData = await fetchMCPTelemetry();
+    renderMCPTelemetry(mcpData);
+  } catch (e) {
+    renderMCPTelemetry({ error: e.message });
+  }
+
+  // Platform Status
+  try {
+    const platforms = await fetchPlatformStatus();
+    renderPlatform(platforms);
+  } catch (e) {
+    document.getElementById('platform-body').innerHTML = `<p class="error">平台状态获取失败</p>`;
+  }
+
+  document.getElementById('lastUpdated').textContent = `最后刷新: ${now}`;
+}
+
+// --- Init ---
+loadTokens();
+refreshAll();
+</script>
+
+</body>
+</html>
