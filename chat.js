@@ -1265,6 +1265,63 @@ async function cmdConnectCC() {
   console.log('   核对一致后，连接建立。之后你就可以对 CC 说"开始监听"。');
 }
 
+// ── pair-me ─────────────────────────────────────────────────────────────────
+
+/** Output the B-message that the friend pastes to their CC.
+ *  Auto-registers 小龙虾's identity if needed. */
+async function cmdPairMe() {
+  let creds = loadCredentials();
+
+  // Auto-register if first time (no identity yet)
+  if (!creds) {
+    console.warn('[pair-me] 未注册，正在创建 OceanBus 身份...');
+    ensureDir();
+    const ob = await createOceanBus({ keyStore: { type: 'memory' } });
+    try {
+      const reg = await ob.register();
+      const openid = await ob.getOpenId();
+      creds = { agent_id: reg.agent_id, api_key: reg.api_key, openid, source: SKILL_SOURCE, created_at: new Date().toISOString() };
+      fs.writeFileSync(CRED_FILE, JSON.stringify(creds, null, 2));
+    } catch (e) {
+      console.error('注册失败: ' + e.message);
+      await ob.destroy();
+      process.exit(1);
+    }
+    await ob.destroy();
+  }
+
+  const openid = creds.openid;
+
+  const bMsg = [
+    '# 请将本条消息粘贴给你的 Claude Code',
+    '',
+    '1、安装/升级 ocean-chat 和 SDK，并注册身份：',
+    '',
+    'if cd ocean-chat 2>/dev/null; then git pull; else git clone https://github.com/ryanbihai/ocean-chat.git && cd ocean-chat; fi && npm install && npm install oceanbus@latest && node chat.js setup',
+    '',
+    '2、添加小龙虾为联系人：',
+    '',
+    'node chat.js add 小龙虾 ' + openid,
+    '',
+    '3、启动监听：',
+    '',
+    '使用 Monitor (persistent) 持续监听 OceanBus 新消息：',
+    '命令：cd <ocean-chat 所在目录> && node chat.js --data-dir <你的 data 目录> listen',
+    '没有消息时完全静默，有消息自动推送。',
+    '',
+    '4、发确认消息给小龙虾：',
+    '',
+    'node chat.js send 小龙虾 "已经对接，请给我下指令"',
+  ].join('\n');
+
+  console.log('');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(bMsg);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('');
+  console.log('👆 请朋友把上面围栏内的内容粘贴给他的 Claude Code。');
+}
+
 // ── Task Queue ──────────────────────────────────────────────────────────────
 
 function cmdTasks(action) {
@@ -1422,6 +1479,9 @@ async function main() {
         break;
       case 'connect-cc':
         await cmdConnectCC();
+        break;
+      case 'pair-me':
+        await cmdPairMe();
         break;
       case 'listen': {
         // Parse --on-message, --auto-exec, --project-dir flags
