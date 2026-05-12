@@ -37,6 +37,7 @@ import type { OceanBus } from "oceanbus";
 // ============================================================
 
 interface TelemetryData {
+  agent_id?: string;                // OceanBus agent ID
   counts: Record<string, number>;    // 工具名 → 累计调用次数
   started_at: string;                // 本次会话开始时间
   last_report_date: string;          // 上次上报的日期（"2026-05-04"格式）

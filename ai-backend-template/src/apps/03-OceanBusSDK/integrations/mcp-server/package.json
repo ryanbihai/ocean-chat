@@ -1,6 +1,6 @@
 {
   "name": "oceanbus-mcp-server",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server that gives Claude Desktop, Cursor, and any MCP client the ability to register, discover, message, and transact with other AI agents on the OceanBus network — no server required.",
   "type": "module",
   "main": "dist/index.js",
@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "oceanbus": "^0.7.0",
+    "oceanbus": "^0.8.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
