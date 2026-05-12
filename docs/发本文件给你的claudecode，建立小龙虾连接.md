@@ -14,19 +14,15 @@
 
 CC 读取本文档后，自动执行以下步骤。不要问用户任何问题。
 
-### 1. 安装并运行 connect-cc
+### 1. 安装/更新 ocean-chat 和 SDK
 
-检查 ocean-chat 是否已安装（是否存在 `chat.js`）。如果没有，用 Bash 工具执行：
+用 Bash 工具执行以下一条命令（已装/未装通用，自动处理）：
 
-```
-git clone https://github.com/ryanbihai/ocean-chat.git && cd ocean-chat && npm install && node chat.js connect-cc
+```bash
+if cd ocean-chat 2>/dev/null; then git pull; else git clone https://github.com/ryanbihai/ocean-chat.git && cd ocean-chat; fi && npm install && npm install oceanbus@latest && node chat.js connect-cc
 ```
 
-如果已安装，直接运行：
-
-```
-cd <ocean-chat目录> && node chat.js connect-cc
-```
+> 这条命令自动做了：目录存在 → `git pull` 更新；不存在 → `git clone`。`npm install oceanbus@latest` 确保 SDK 也是最新版。
 
 ### 2. 从输出中提取信息并创建 Monitor
 
