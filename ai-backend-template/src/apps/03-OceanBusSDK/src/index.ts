@@ -116,6 +116,7 @@ export class OceanBus {
     this.mailbox = new MailboxSync(
       this.http,
       () => this.identity.getApiKey(),
+      () => this.identity.getPersistedOpenId(),
       this.cursor,
       config.mailbox.defaultPageSize
     );
@@ -277,9 +278,8 @@ export class OceanBus {
       try {
         await this.roster.add({
           id: c.id, name: c.name,
-          agents: [{ agentId: '', openId: c.openid, purpose: 'L1 service', isDefault: true }],
+          openIds: [c.openid],
           tags: c.tags, notes: c.notes,
-          source: 'system' as const, aliases: c.aliases,
         });
       } catch { /* already exists */ }
     }

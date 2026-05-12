@@ -9,17 +9,20 @@ const MAX_PAGINATION_ITERATIONS = 50;
 export class MailboxSync {
   private http: HttpClient;
   private getApiKey: () => string | null;
+  private getOpenId: () => string | null;
   private cursor: SeqCursor;
   private defaultPageSize: number;
 
   constructor(
     http: HttpClient,
     getApiKey: () => string | null,
+    getOpenId: () => string | null,
     cursor: SeqCursor,
     defaultPageSize: number = 100
   ) {
     this.http = http;
     this.getApiKey = getApiKey;
+    this.getOpenId = getOpenId;
     this.cursor = cursor;
     this.defaultPageSize = Math.min(defaultPageSize, MAX_PAGE_SIZE);
   }
@@ -32,6 +35,9 @@ export class MailboxSync {
     const apiKey = this.getApiKey();
     if (!apiKey) throw new OceanBusError('Not authenticated');
 
+    const toOpenId = this.getOpenId();
+    if (!toOpenId) throw new OceanBusError('No OpenID available for mailbox sync');
+
     const allMessages: Message[] = [];
     let currentSince = sinceSeq ?? this.cursor.get();
     const pageSize = limit ?? this.defaultPageSize;
@@ -42,6 +48,7 @@ export class MailboxSync {
       const res = await this.http.get<SyncData>('/messages/sync', {
         apiKey,
         query: {
+          to_openid: toOpenId,
           since_seq: currentSince,
           limit: pageSize,
         },
