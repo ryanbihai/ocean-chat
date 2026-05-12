@@ -310,6 +310,9 @@ export class OceanBus {
 
   /** @deprecated Use getOpenId() for stable identity, or newOpenId() to generate a new nonce. */
   async whoami(): Promise<{ agent_id: string; openid: string }> {
+    console.warn('[oceanbus] ⚠ whoami() is deprecated. Use getOpenId() (stable) or newOpenId() (new nonce). This method will be removed in a future version.');
+    console.warn('[oceanbus]   getOpenId()  = your stable receiving OpenID (persisted across sessions)');
+    console.warn('[oceanbus]   newOpenId()  = generate a new anti-tracking nonce (changes your address)');
     const openid = await this.getOpenId();
     return { agent_id: this.identity.getAgentId()!, openid };
   }

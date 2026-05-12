@@ -111,6 +111,7 @@ export class AgentIdentityManager {
 
   /** @deprecated Use getOpenId() for stable identity, or newOpenId() to generate a new nonce. */
   async whoami(): Promise<OpenIDData> {
+    console.warn('[oceanbus] ⚠ identity.whoami() is deprecated. Use getOpenId() or newOpenId().');
     const my_openid = await this.getOpenId();
     return { my_openid, created_at: '' };
   }

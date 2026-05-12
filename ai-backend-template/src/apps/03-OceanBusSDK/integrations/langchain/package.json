@@ -1,6 +1,6 @@
 {
   "name": "oceanbus-langchain",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "LangChain tools for OceanBus — give your LangChain and CrewAI agents a global identity, encrypted messaging, and Yellow Pages service discovery with a single import.",
   "type": "module",
   "main": "dist/index.js",
