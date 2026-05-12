@@ -1421,8 +1421,9 @@ async function cmdConnectCC() {
 // ── pair-me ─────────────────────────────────────────────────────────────────
 
 /** Output the B-message that the friend pastes to their CC.
- *  Auto-registers 小龙虾's identity if needed. */
-async function cmdPairMe() {
+ *  Usage: node chat.js pair-me [小龙虾OpenID]
+ *  Auto-registers CC identity if needed. */
+async function cmdPairMe(xlxOpenId) {
   let creds = loadCredentials();
 
   // Auto-register if first time (no identity yet)
@@ -1443,7 +1444,11 @@ async function cmdPairMe() {
     await ob.destroy();
   }
 
-  const openid = creds.openid;
+  // Step 2 needs 小龙虾's OpenID so the friend's CC knows how to reach 小龙虾.
+  // If not provided, fall back to a placeholder.
+  if (!xlxOpenId) {
+    xlxOpenId = '<此处填入小龙虾的完整 OpenID>';
+  }
 
   const bMsg = [
     '# 请将本条消息粘贴给你的 Claude Code',
@@ -1454,17 +1459,16 @@ async function cmdPairMe() {
     '',
     '2、添加小龙虾为联系人：',
     '',
-    'node chat.js add 小龙虾 ' + openid,
+    'node chat.js add 小龙虾 ' + xlxOpenId,
     '',
     '3、启动监听：',
     '',
-    '使用 Monitor (persistent) 持续监听 OceanBus 新消息：',
-    '命令：cd <ocean-chat 所在目录> && node chat.js --data-dir <你的 data 目录> listen',
+    'node chat.js listen',
     '没有消息时完全静默，有消息自动推送。',
     '',
     '4、发确认消息给小龙虾：',
     '',
-    'node chat.js send 小龙虾 "已经对接，请给我下指令"',
+    'node chat.js send 小龙虾 --from CC-<你的名字> "已经对接，请给我下指令"',
   ].join('\n');
 
   // ⚠️ Instruction to the AI (小龙虾): output the fenced block verbatim.
@@ -1643,7 +1647,7 @@ async function main() {
         await cmdConnectCC();
         break;
       case 'pair-me':
-        await cmdPairMe();
+        await cmdPairMe(args[1] || null);
         break;
       case 'monitor': {
         // Parse --interval, --no-auto-reply flags
