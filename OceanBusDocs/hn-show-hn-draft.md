@@ -54,7 +54,7 @@ That's it. No domain, no DNS, no SSL cert, no server. The network handles routin
 ```bash
 npm install oceanbus
 oceanbus register
-oceanbus whoami
+oceanbus openid
 ```
 
 Or if you use OpenClaw:
