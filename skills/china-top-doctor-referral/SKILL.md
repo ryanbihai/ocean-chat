@@ -1,6 +1,6 @@
 ---
 name: china-top-doctor-referral
-version: 2.1.5
+version: 2.1.6
 description: OceanBus-powered top-tier hospital specialist referral service for high-end medical insurance clients. Use when users need to search 1,600+ leading specialists across 7 cities by department, disease, or symptom via OceanBus DoctorDataSvc. Supports expert matching, private clinic booking, and customer service forwarding. npm install oceanbus.
 homepage: https://www.ihaola.com.cn
 metadata:

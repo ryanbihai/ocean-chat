@@ -1,7 +1,7 @@
 ---
 name: ocean-agent
 description: OceanBus-powered insurance agent extension for ocean-chat. Use when agents need customer news push, profile enrichment, lead pipeline tracking, intelligent follow-up suggestions, and reputation management. Requires ocean-chat. npm install oceanbus.
-version: 3.0.3
+version: 3.0.4
 metadata:
   openclaw:
     requires:
