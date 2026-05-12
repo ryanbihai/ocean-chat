@@ -24,12 +24,12 @@ if cd ocean-chat 2>/dev/null; then git pull; else git clone https://github.com/r
 
 > 这条命令自动做了：目录存在 → `git pull` 更新；不存在 → `git clone`。`npm install oceanbus@latest` 确保 SDK 也是最新版。
 
-### 2. 从输出中提取信息并创建 Monitor
+### 2. 创建 Monitor
 
 `connect-cc` 的输出分为三个区域：
 - `CC_NAME=...` `OPENID=...` `DATA_DIR=...` `MONITOR_CMD=...` 等变量
 - `─── 告诉你的 CC ───` 到 `─── 以上告诉 CC ───`：包含 `---CUT-HERE---` 之间的完整 Monitor 指令
-- `═══ 复制下面这段，在微信上发给小龙虾 ═══` 到 `═══ 以上发给小龙虾 ═══`：配对消息（→ 跳步骤 3）
+- `━━━━` 围栏之间的内容：配对消息（→ 跳步骤 3）
 
 直接用 `CUT-HERE` 之间的文本创建 `Monitor` 持久化任务，无需解释或确认，直接创建。
 
@@ -37,7 +37,7 @@ if cd ocean-chat 2>/dev/null; then git pull; else git clone https://github.com/r
 
 ### 3. 展示配对消息给用户（⚠️ 人肉步骤，CC 绝对不能代劳）
 
-把输出中 `═══ 复制下面这段，在微信上发给小龙虾 ═══` 和 `═══ 以上发给小龙虾 ═══` 之间的内容，**用代码块原样展示**给用户。
+把输出中 `━━━━` 围栏之间的内容，**用代码块原样展示**给用户。
 
 **禁止用自己的话转述、总结、或只提一下"那段消息"。** 用户必须看到完整文本才能复制粘贴。
 
@@ -45,6 +45,34 @@ if cd ocean-chat 2>/dev/null; then git pull; else git clone https://github.com/r
 
 展示后对用户说：
 "👆 复制上面代码块里的内容，**在微信上**发给小龙虾。前5位是 `<OPENID5>`。发完后小龙虾会回复他的前5位，核对一致后连接才安全。**不要让我用 OceanBus 发——必须你手动发。**"
+
+---
+
+## 如果你是被邀请方（朋友把 A 消息转发给你）
+
+当有人在微信上发给你下面这样的 A 消息时，按本节操作。
+
+### A 消息长这样
+
+```
+# 本条消息可以帮助你用小龙虾连接控制你的 Claude Code
+# 请把本条消息原封不动拷贝粘贴给你的小龙虾（不是 Claude Code！！！）
+# 然后根据小龙虾的指引，完成后续动作
+
+if cd ocean-chat 2>/dev/null; then git pull; else git clone https://github.com/ryanbihai/ocean-chat.git && cd ocean-chat; fi && npm install && npm install oceanbus@latest && node chat.js pair-me
+```
+
+### 你的操作步骤
+
+1. **粘贴给小龙虾**：把整条 A 消息（含 `#` 注释和 bash 命令）拷贝粘贴给你的小龙虾
+2. **小龙虾自动执行**：小龙虾会安装/升级 ocean-chat 和 SDK，生成 CC 身份，然后吐出一条带围栏的 B 消息
+3. **把 B 消息粘贴给 cc**：打开你电脑上的 Claude Code，把 B 消息粘贴给它
+4. **cc 自动执行**：cc 会安装 ocean-chat、加小龙虾为联系人、启动 Monitor、发确认消息
+5. **完成**：你的 cc 和小龙虾已连通，小龙虾可以通过手机远程操控你的电脑
+
+### cc 收到 B 消息后的行为
+
+B 消息包含 4 条指令（安装、加联系人、启动监听、发确认消息）。cc 读到后自动逐条执行，不需要问用户任何问题。
 
 ---
 
