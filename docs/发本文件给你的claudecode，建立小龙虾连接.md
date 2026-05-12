@@ -39,8 +39,10 @@ if cd ocean-chat 2>/dev/null; then git pull; else git clone https://github.com/r
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 请将本条消息粘贴给你的 Claude Code
+# 逐条执行以下命令，遇到错误就停下报告。
 
 1、安装/升级 ocean-chat 和 SDK，并注册身份：
+（这是一整条命令，不要拆开。）
 
 if cd ocean-chat 2>/dev/null; then git pull; else git clone https://github.com/ryanbihai/ocean-chat.git && cd ocean-chat; fi && npm install && npm install oceanbus@latest && node chat.js setup
 
@@ -55,7 +57,7 @@ node chat.js listen
 
 4、发确认消息给小龙虾：
 
-node chat.js send 小龙虾 --from CC-<你的名字> "已经对接，请给我下指令"
+node chat.js send 小龙虾 --from CC-<你的名字> "已经对接。给我下指令时请用格式：请发给CC：<指令内容>"
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
