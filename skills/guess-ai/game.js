@@ -501,7 +501,7 @@ AI mode (requires ANTHROPIC_API_KEY):
     switch (cmd) {
       case 'setup':      await cmdSetup(); break;
       case 'openid':     await cmdOpenId(); break;
-      case 'whoami':     console.error('⚠  "whoami" is deprecated — use "openid" instead.'); await cmdOpenId(); break;
+
 
       case 'host':       await cmdHost(args[1]); break;
       case 'deregister': await cmdDeregister(); break;
