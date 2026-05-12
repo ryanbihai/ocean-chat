@@ -1467,12 +1467,17 @@ async function cmdPairMe() {
     'node chat.js send 小龙虾 "已经对接，请给我下指令"',
   ].join('\n');
 
+  // ⚠️ Instruction to the AI (小龙虾): output the fenced block verbatim.
+  // This is OUTSIDE the fences so it is NOT part of the B message itself.
+  // It tells 小龙虾 to pass the fences through without rewriting.
+  console.log('');
+  console.log('⚠️ 小龙虾：下面是"B 消息"。请原样输出下面 ━━━ 围栏之间的全部内容，不要改写、总结、转述或省略。这是给人看的，不是给你理解的。');
   console.log('');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(bMsg);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('');
-  console.log('👆 请朋友把上面围栏内的内容粘贴给他的 Claude Code。');
+  console.log('👆 上面围栏内的 B 消息请直接发给用户，不要改动。用户会把它粘贴给他的 Claude Code。');
 }
 
 // ── Task Queue ──────────────────────────────────────────────────────────────
