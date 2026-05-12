@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 
+const { sendWeixinMessage, resolveWeixinConfig, printSetupGuide } = require('./src/notify-wechat');
+
 // OceanBus Chat — A2A Communication Skill with Conversation Threading
 //
 // AI agents communicate, negotiate, and organize multi-topic conversations
@@ -78,11 +80,9 @@ async function migrateContacts() {
       await roster.add({
         name,
         id: slug,
-        agents: [{ agentId: '', openId: openid, purpose: 'OceanBus 联系人', isDefault: true }],
+        openIds: [openid],
         tags: [],
-        aliases: [],
         notes: '',
-        source: 'chat',
       });
     }
 
@@ -173,7 +173,7 @@ async function cmdSetup() {
     if (contacts.length > 0) {
       console.log('通讯录中有 ' + contacts.length + ' 位联系人:');
       for (const c of contacts) {
-        const openid = c.agents[0]?.openId || '';
+        const openid = c.openIds[0] || '';
         console.log('  - ' + c.name + (openid ? ' (' + shortId(openid) + ')' : ''));
       }
       console.log('');
@@ -244,10 +244,10 @@ async function cmdAdd(name, openid) {
   const existing = await roster.get(id);
   if (existing && existing.status === 'active') {
     // Add additional agent if different OpenID
-    const hasAgent = existing.agents.some(a => a.openId === openid);
+    const hasAgent = existing.openIds.some(oid => oid === openid);
     if (!hasAgent) {
       await roster.update(id, {
-        agents: [...existing.agents, { agentId: '', openId: openid, purpose: 'OceanBus 联系人', isDefault: false }],
+        openIds: [...existing.openIds, openid],
       });
       console.log('已为 ' + name + ' 添加新的 Agent 地址');
     } else {
@@ -259,11 +259,9 @@ async function cmdAdd(name, openid) {
   await roster.add({
     name,
     id,
-    agents: [{ agentId: '', openId: openid, purpose: 'OceanBus 联系人', isDefault: true }],
+    openIds: [openid],
     tags: [],
-    aliases: [],
     notes: '',
-    source: 'chat',
   });
 
   const creds = loadCredentials();
@@ -290,7 +288,7 @@ async function cmdContacts() {
   }
   console.log('通讯录 (' + contacts.length + ' 人):');
   for (const c of contacts) {
-    const openid = c.agents[0]?.openId || '';
+    const openid = c.openIds[0] || '';
     const tagStr = c.tags.length > 0 ? ' [' + c.tags.join(', ') + ']' : '';
     console.log('  ' + c.name + ' — ' + shortId(openid) + tagStr);
   }
@@ -334,7 +332,7 @@ async function cmdShow(name) {
     return;
   }
   const c = result.exact[0];
-  const openid = c.agents[0]?.openId || '(无)';
+  const openid = c.openIds[0] || '(无)';
   const lastContact = c.lastContactAt
     ? new Date(c.lastContactAt).toLocaleString('zh-CN')
     : '从未联系';
@@ -401,14 +399,14 @@ async function cmdSend(target, message, fromName) {
 
     if (searchResult.exact.length === 1) {
       const contact = searchResult.exact[0];
-      openid = contact.agents[0]?.openId || target;
+      openid = contact.openIds[0] || target;
       displayName = contact.name;
       await roster.touch(contact.id);
     } else if (searchResult.exact.length > 1) {
       // Multiple exact matches — use the first one with agents
-      const withAgent = searchResult.exact.find(e => e.agents.length > 0);
+      const withAgent = searchResult.exact.find(e => e.openIds.length > 0);
       if (withAgent) {
-        openid = withAgent.agents[0].openId;
+        openid = withAgent.openIds[0];
         displayName = withAgent.name;
       } else {
         openid = target;
@@ -416,7 +414,7 @@ async function cmdSend(target, message, fromName) {
       }
     } else if (searchResult.fuzzy.length > 0) {
       const contact = searchResult.fuzzy[0];
-      openid = contact.agents[0]?.openId || target;
+      openid = contact.openIds[0] || target;
       displayName = contact.name;
       await roster.touch(contact.id);
     } else {
@@ -526,10 +524,10 @@ async function cmdDate(target, type, opts) {
   let openid, displayName;
 
   if (searchResult.exact.length === 1) {
-    openid = searchResult.exact[0].agents[0]?.openId || target;
+    openid = searchResult.exact[0].openIds[0] || target;
     displayName = searchResult.exact[0].name;
   } else if (searchResult.fuzzy.length > 0) {
-    openid = searchResult.fuzzy[0].agents[0]?.openId || target;
+    openid = searchResult.fuzzy[0].openIds[0] || target;
     displayName = searchResult.fuzzy[0].name;
   } else {
     console.log('未找到联系人: ' + target);
@@ -812,16 +810,14 @@ async function cmdListen(onMessage, autoExec = false, projectDir = null) {
       if (searchResult.exact.length > 0) {
         // Update existing contact's OpenID (identity change — e.g. reinstalled)
         const c = searchResult.exact[0];
-        const newAgent = { agentId: '', openId: msg.from_openid, purpose: 'OceanBus 联系人', isDefault: true };
-        await roster.update(c.id, { agents: [newAgent] });
+        await roster.update(c.id, { openIds: [msg.from_openid] });
         await roster.touch(c.id);
         contact = await roster.findByOpenId(msg.from_openid);
         console.log('[Roster] 更新联系人 OpenID: ' + autoName + ' → ' + shortId(msg.from_openid));
       } else {
         // Brand new contact — add to Roster
         try {
-          const newAgent = { agentId: '', openId: msg.from_openid, purpose: 'OceanBus 联系人', isDefault: true };
-          await roster.add({ name: autoName, agents: [newAgent], source: 'auto' });
+          await roster.add({ name: autoName, openIds: [msg.from_openid] });
           const added = await roster.findByOpenId(msg.from_openid);
           if (added) {
             contact = added;
@@ -920,6 +916,156 @@ async function cmdListen(onMessage, autoExec = false, projectDir = null) {
   await new Promise(() => {});
 }
 
+// ── Monitor (Listen + WeChat push) ─────────────────────────────────────────
+
+async function cmdMonitor({ intervalMs, noAutoReply, autoExec, projectDir }) {
+  const creds = loadCredentials();
+  if (!creds) { console.log('尚未注册。运行: node chat.js setup'); return; }
+
+  // Resolve WeChat config (env > auto-discovery > fallback)
+  const wxConfig = resolveWeixinConfig();
+  const wxEnabled = !!(wxConfig && wxConfig.token && wxConfig.userId);
+
+  if (!wxEnabled) {
+    printSetupGuide();
+  } else {
+    console.log('[monitor] 微信通知已配置 (来源: ' + wxConfig.source + ') → ' + wxConfig.userId.slice(0, 20) + '...');
+  }
+  const wxToken = wxConfig?.token;
+  const wxBaseUrl = wxConfig?.baseUrl;
+  const wxUserId = wxConfig?.userId;
+
+  await migrateContacts();
+
+  const ob = await createOceanBus({
+    keyStore: { type: 'memory' },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
+  });
+
+  const roster = getRoster();
+  let lastSeq = 0;
+
+  // Try to jump to latest seq on first start
+  try {
+    const res = await ob.http.get('/messages/sync', {
+      apiKey: creds.api_key,
+      query: { since_seq: 0, limit: 1, to_openid: creds.openid },
+    });
+    lastSeq = Number(res.data?.messages?.[0]?.seq_id ?? 0);
+  } catch (_) {}
+
+  if (autoExec) {
+    console.log('[monitor] 自动执行模式 — 收到消息立即 spawn claude');
+    console.log('  工作目录: ' + (projectDir || process.cwd()));
+  }
+  console.log('[monitor] 启动监听 (轮询间隔 ' + intervalMs + 'ms, openid=' + creds.openid.slice(0, 5) + '...)');
+  console.log('');
+
+  // Main polling loop
+  let running = true;
+  process.on('SIGINT', () => { running = false; });
+  process.on('SIGTERM', () => { running = false; });
+
+  let consecutiveErrors = 0;
+
+  while (running) {
+    try {
+      const res = await ob.http.get('/messages/sync', {
+        apiKey: creds.api_key,
+        query: { since_seq: lastSeq, limit: 10, to_openid: creds.openid },
+      });
+
+      const messages = res.data?.messages ?? [];
+      consecutiveErrors = 0;
+
+      for (const msg of messages) {
+        const seq = Number(msg.seq_id ?? 0);
+        const from = msg.from_openid ?? '';
+        const content = msg.content ?? '';
+
+        if (seq > lastSeq) lastSeq = seq;
+
+        // Skip self-sent messages (prevent echo loop)
+        if (from === creds.openid) continue;
+
+        // Resolve sender name from roster
+        let contact = await roster.findByOpenId(from);
+        const fromName = contact ? contact.name : from.slice(0, 5);
+        const displayText = (content || '').slice(0, 300);
+
+        console.log('── 来自 ' + fromName + ' (' + from.slice(0, 5) + '...) ──');
+        console.log('  ' + (msg.created_at || ''));
+        console.log('');
+        console.log(displayText);
+        console.log('');
+
+        // 1. Push to WeChat
+        if (wxEnabled) {
+          const wxText = '🔔 ' + fromName + '\n' + displayText;
+          try {
+            await sendWeixinMessage({ token: wxToken, baseUrl: wxBaseUrl, toUserId: wxUserId, text: wxText });
+            console.log('[monitor] ✅ 微信通知成功');
+          } catch (wxErr) {
+            console.warn('[monitor] ⚠️ 微信通知失败:', wxErr.message);
+          }
+        }
+
+        // 2. Auto-reply
+        if (!noAutoReply && content.trim()) {
+          try {
+            await ob.send(from, '✅ 已收到您的消息');
+          } catch (sendErr) {
+            console.error('[monitor] 自动回复失败:', sendErr.message);
+          }
+        }
+
+        // 3. Auto-exec (spawn claude)
+        if (autoExec && content.trim()) {
+          const prompt = content;
+          const label = fromName;
+          console.log('[auto-exec] 开始执行: ' + label);
+          try {
+            const result = await new Promise((resolve, reject) => {
+              const child = spawn('claude', ['-p', prompt, '--dangerously-skip-permissions'], {
+                cwd: projectDir || process.cwd(),
+                stdio: ['ignore', 'pipe', 'pipe'],
+              });
+              const timer = setTimeout(() => { child.kill(); reject(new Error('执行超时')); }, 300000);
+              let out = '', err = '';
+              child.stdout.on('data', d => out += d);
+              child.stderr.on('data', d => err += d);
+              child.on('close', code => {
+                clearTimeout(timer);
+                if (code === 0 && out.trim()) resolve(out.trim());
+                else reject(new Error(err.trim() || 'exit ' + code));
+              });
+              child.on('error', e => { clearTimeout(timer); reject(e); });
+            });
+            console.log('[auto-exec] 完成，回报 ' + label);
+            await ob.send(from, result);
+          } catch (e) {
+            console.error('[auto-exec] 失败:', e.message);
+            try { await ob.send(from, '任务执行失败: ' + e.message); } catch (_) {}
+          }
+        }
+      }
+    } catch (err) {
+      consecutiveErrors++;
+      console.error('[monitor] sync 错误 (' + consecutiveErrors + '):', err.message);
+      if (consecutiveErrors >= 5) {
+        console.error('[monitor] 连续错误，退避 30s');
+        await new Promise(r => setTimeout(r, 30000));
+        consecutiveErrors = 0;
+      }
+    }
+
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+
+  console.log('[monitor] 正常退出');
+  await ob.destroy();
+}
+
 // ── Thread ──────────────────────────────────────────────────────────────────
 
 async function cmdThreadCreate(target, subject, payloadStr) {
@@ -936,10 +1082,10 @@ async function cmdThreadCreate(target, subject, payloadStr) {
   const searchResult = await roster.search(target);
   let openid, displayName;
   if (searchResult.exact.length > 0) {
-    openid = searchResult.exact[0].agents[0]?.openId || target;
+    openid = searchResult.exact[0].openIds[0] || target;
     displayName = searchResult.exact[0].name;
   } else if (searchResult.fuzzy.length > 0) {
-    openid = searchResult.fuzzy[0].agents[0]?.openId || target;
+    openid = searchResult.fuzzy[0].openIds[0] || target;
     displayName = searchResult.fuzzy[0].name;
   } else {
     console.log('未找到联系人: ' + target);
@@ -1404,6 +1550,10 @@ async function main() {
     console.log('  node chat.js listen --on-message "cmd"  收到消息时执行命令');
     console.log('    模板变量: {from} {openid} {content} {time}');
     console.log('    --on-message task-file                 内置模式：写入任务队列（推荐）');
+    console.log('  node chat.js monitor                    实时监听 + 微信推送通知');
+    console.log('    --interval <ms>                        轮询间隔（默认 3000）');
+    console.log('    --no-auto-reply                        禁用自动回复');
+    console.log('  环境变量: WECHAT_BOT_TOKEN WECHAT_BOT_BASE_URL WECHAT_BOT_USER_ID');
     console.log('  node chat.js tasks [clear]              查看/清空任务队列');
     console.log('  node chat.js publish <名字>             发布到黄页（让朋友搜到你）');
     console.log('  node chat.js discover <名字>            搜索朋友的 OpenID');
@@ -1483,6 +1633,23 @@ async function main() {
       case 'pair-me':
         await cmdPairMe();
         break;
+      case 'monitor': {
+        // Parse --interval, --no-auto-reply flags
+        let intervalMs = 3000;
+        const intIdx = args.indexOf('--interval');
+        if (intIdx >= 0 && intIdx + 1 < args.length) {
+          intervalMs = parseInt(args[intIdx + 1], 10) || 3000;
+        }
+        const noAutoReply = args.includes('--no-auto-reply');
+        const autoExec = args.includes('--auto-exec');
+        let projectDir = process.cwd();
+        const pdIdx = args.indexOf('--project-dir');
+        if (pdIdx >= 0 && pdIdx + 1 < args.length) {
+          projectDir = args[pdIdx + 1];
+        }
+        await cmdMonitor({ intervalMs, noAutoReply, autoExec, projectDir });
+        break;
+      }
       case 'listen': {
         // Parse --on-message, --auto-exec, --project-dir flags
         let onMsg = null;
