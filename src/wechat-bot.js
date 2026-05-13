@@ -199,13 +199,35 @@ function generateClientId() {
 }
 
 async function sendWechatMessage(token, toUserId, text, contextToken) {
+  const MAX_LEN = 300;
+  if (text.length <= MAX_LEN) {
+    await sendSingleWx(token, toUserId, text, contextToken);
+    return;
+  }
+  const parts = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    if (remaining.length <= MAX_LEN) { parts.push(remaining); break; }
+    let cut = MAX_LEN;
+    const nl = remaining.lastIndexOf('\n', MAX_LEN);
+    if (nl > MAX_LEN / 2) cut = nl + 1;
+    parts.push(remaining.slice(0, cut));
+    remaining = remaining.slice(cut);
+  }
+  for (let i = 0; i < parts.length; i++) {
+    const prefix = parts.length > 1 ? `(${i + 1}/${parts.length}) ` : '';
+    await sendSingleWx(token, toUserId, prefix + parts[i], contextToken);
+  }
+}
+
+async function sendSingleWx(token, toUserId, text, contextToken) {
   await httpsPost('ilink/bot/sendmessage', {
     msg: {
       from_user_id: '',
       to_user_id: toUserId,
       client_id: generateClientId(),
-      message_type: 2,          // BOT
-      message_state: 2,         // FINISH
+      message_type: 2,
+      message_state: 2,
       item_list: [{ type: 1, text_item: { text } }],
       context_token: contextToken || undefined,
     },

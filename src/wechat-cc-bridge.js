@@ -134,6 +134,36 @@ async function getUpdates(token, buf, timeoutMs = 35000) {
 }
 
 async function sendWechatMessage(token, toUserId, text, contextToken) {
+  // 微信长消息会被折叠，超过 300 字自动拆条
+  const MAX_LEN = 300;
+  if (text.length <= MAX_LEN) {
+    await sendSingle(token, toUserId, text, contextToken);
+    return;
+  }
+
+  const parts = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    if (remaining.length <= MAX_LEN) {
+      parts.push(remaining);
+      break;
+    }
+    // 尽量在换行处断开
+    let cut = MAX_LEN;
+    const nl = remaining.lastIndexOf('\n', MAX_LEN);
+    if (nl > MAX_LEN / 2) cut = nl + 1;
+    parts.push(remaining.slice(0, cut));
+    remaining = remaining.slice(cut);
+  }
+
+  const total = parts.length;
+  for (let i = 0; i < total; i++) {
+    const prefix = total > 1 ? `(${i + 1}/${total}) ` : '';
+    await sendSingle(token, toUserId, prefix + parts[i], contextToken);
+  }
+}
+
+async function sendSingle(token, toUserId, text, contextToken) {
   await httpsPost('ilink/bot/sendmessage', {
     msg: {
       from_user_id: '', to_user_id: toUserId,
