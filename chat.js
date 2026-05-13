@@ -229,11 +229,12 @@ async function cmdSetup() {
 
       // Rotate: create a new primary key
       let newKey;
+      let rotationFailed = false;
       try {
         const newKeyData = await ob.createKey();
         newKey = newKeyData.api_key;
       } catch (_) {
-        // /me/keys may fail if backup key doesn't have permission
+        rotationFailed = true;
         newKey = idData.backup_key;
       }
 
@@ -256,13 +257,18 @@ async function cmdSetup() {
         saveIdFile(idData.agent_id, newBackupKey);
       }
 
-      console.log('   ✅ 恢复成功！身份不变，key 已轮换。');
+      console.log('   ✅ 恢复成功！身份不变。');
       console.log('');
       console.log('   你的 agent_id: ' + idData.agent_id + ' (未变)');
       console.log('   你的 OpenID:   ' + openid);
       console.log('');
-      if (newBackupKey) {
+      if (rotationFailed) {
+        console.log('   ⚠️  key 轮换失败，当前使用备用 key 作为主 key。');
+        console.log('   运行 node chat.js renew-key 重试轮换。');
+      } else if (newBackupKey) {
         console.log('   主 key 和备用 key 均已更新。');
+      } else {
+        console.log('   主 key 已更新，备用 key 创建失败。运行 node chat.js renew-key 重试。');
       }
       await ob.destroy();
       return;
@@ -371,13 +377,15 @@ async function cmdRenewKey() {
     console.log('   主 key: ' + CRED_FILE + '  已更新');
     if (newBackupKey) {
       console.log('   备用 key: ' + ID_FILE + '  已更新');
+    } else {
+      console.log('   ⚠️  备用 key 未更新。请再次运行 renew-key 创建新的备用 key。');
     }
 
     await ob.destroy();
     await ob2.destroy();
   } catch (e) {
     console.error('轮换失败: ' + e.message);
-    console.error('主 key 未被修改。');
+    console.error('主 key 和备用 key 均未被修改。');
   }
 }
 
@@ -1539,6 +1547,117 @@ async function cmdConnectCC() {
   console.log('   核对一致后，连接建立。之后你就可以对 CC 说"开始监听"。');
 }
 
+// ── wechat-pair ─────────────────────────────────────────────────────────────
+
+/** 生成微信配对的二维码和说明。CC 端运行，用户微信扫码后即可直接操作 CC。 */
+async function cmdWechatPair() {
+  let creds = loadCredentials();
+
+  // Auto-register if needed
+  if (!creds) {
+    console.warn('[wechat-pair] 未注册，正在创建 OceanBus 身份...');
+    ensureDir();
+    const ob = await createOceanBus({ keyStore: { type: 'memory' } });
+    try {
+      const reg = await ob.createIdentity();
+      const openid = await ob.getAddress();
+      creds = { agent_id: reg.agent_id, api_key: reg.api_key, openid, source: SKILL_SOURCE, created_at: new Date().toISOString() };
+      fs.writeFileSync(CRED_FILE, JSON.stringify(creds, null, 2));
+    } catch (e) {
+      console.error('注册失败: ' + e.message);
+      await ob.destroy();
+      process.exit(1);
+    }
+    await ob.destroy();
+  }
+
+  const ccName = 'CC-' + path.basename(process.cwd());
+  const ccOpenId = creds.openid;
+
+  console.log('🌊 WeChat 扫码操控 CC\n');
+  console.log('你的 CC 信息:');
+  console.log('  名字:   ' + ccName);
+  console.log('  OpenID: ' + ccOpenId);
+  console.log('  前5位:  ' + ccOpenId.slice(0, 5));
+  console.log('');
+
+  // Try to generate QR code using Bot credentials
+  const wechatCredFile = path.join(os.homedir(), '.oceanbus-chat', 'wechat-bot.json');
+  let qrUrl = null;
+
+  if (fs.existsSync(wechatCredFile)) {
+    try {
+      // Use dynamic import to call the iLink API directly
+      const qrResp = await fetchWechatQR();
+      qrUrl = qrResp;
+    } catch (e) {
+      // Can't fetch QR — will show manual instructions
+    }
+  }
+
+  if (qrUrl) {
+    console.log('📱 用手机微信扫描以下二维码：\n');
+    console.log('   ' + qrUrl + '\n');
+    try {
+      const qrterm = await import('qrcode-terminal');
+      qrterm.default.generate(qrUrl, { small: true });
+    } catch (_) {}
+  } else {
+    console.log('⚠️  无法获取微信 Bot 二维码。请确保 Bridge 已启动。');
+    console.log('   然后在 CC 所在机器运行: node wechat-cc-bridge.js pair-qr\n');
+  }
+
+  console.log('扫码添加 OceanChat Bot 后，发送以下消息完成配对：\n');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('pair ' + ccName + ' ' + ccOpenId);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('');
+  console.log('配对完成后，直接在微信给 Bot 发消息，就能操控你的 CC。');
+}
+
+/** 用 Bot 凭证从 iLink API 获取新二维码 */
+async function fetchWechatQR() {
+  const wechatCredFile = path.join(os.homedir(), '.oceanbus-chat', 'wechat-bot.json');
+  if (!fs.existsSync(wechatCredFile)) throw new Error('Bot not logged in');
+
+  const https = require('https');
+  const crypto = require('crypto');
+
+  const uint32 = crypto.randomBytes(4).readUInt32BE(0);
+  const uin = Buffer.from(String(uint32), 'utf-8').toString('base64');
+
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({});
+    const url = new URL('ilink/bot/get_bot_qrcode?bot_type=3', 'https://ilinkai.weixin.qq.com');
+
+    const req = https.request({
+      hostname: url.hostname, path: url.pathname + url.search, method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        AuthorizationType: 'ilink_bot_token',
+        'X-WECHAT-UIN': uin,
+        'iLink-App-Id': 'bot',
+        'iLink-App-ClientVersion': String(((1 & 0xff) << 16) | ((0 & 0xff) << 8) | (11 & 0xff)),
+        'Content-Length': String(Buffer.byteLength(body)),
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          try { resolve(JSON.parse(data).qrcode_img_content); }
+          catch (e) { reject(e); }
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
 // ── pair-me ─────────────────────────────────────────────────────────────────
 
 /** Output the B-message that the friend pastes to their CC.
@@ -1672,7 +1791,8 @@ async function main() {
     console.log('OceanBus Chat — Agent 会面协商');
     console.log('');
     console.log('命令:');
-    console.log('  node chat.js connect-cc                 一键配通：注册身份、生成配对消息');
+    console.log('  node chat.js connect-cc                 一键配通：通过小龙虾连接 CC');
+    console.log('  node chat.js wechat-pair                扫码配对：微信扫码直接操控 CC');
     console.log('  node chat.js setup                      注册 + 获取你的 OpenID');
     console.log('  node chat.js renew-key                  轮换 key（身份不变）');
     console.log('  node chat.js openid                     查看你的 OpenID');
@@ -1774,6 +1894,9 @@ async function main() {
         break;
       case 'connect-cc':
         await cmdConnectCC();
+        break;
+      case 'wechat-pair':
+        await cmdWechatPair();
         break;
       case 'pair-me':
         await cmdPairMe(args[1] || null);
