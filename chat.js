@@ -1553,7 +1553,7 @@ async function cmdConnectCC() {
 async function cmdWechatUp() {
   let ccCreds = loadCredentials();
 
-  // 1. Auto-register CC identity
+  // 1. Auto-register CC identity（已有则跳过）
   if (!ccCreds) {
     console.warn('[wechat-up] 正在创建 OceanBus 身份...');
     ensureDir();
@@ -1569,26 +1569,48 @@ async function cmdWechatUp() {
       process.exit(1);
     }
     await ob.destroy();
+  } else {
+    console.log('✅ CC 身份已存在 (OpenID: ' + ccCreds.openid.slice(0, 5) + '...)');
   }
 
   const ccName = 'CC-' + path.basename(process.cwd());
   const ccOpenId = ccCreds.openid;
 
-  console.log('');
-  console.log('🌊 WeChat 一键操控 CC');
-  console.log('');
-  console.log('   CC:   ' + ccName);
-  console.log('   OpenID: ' + ccOpenId.slice(0, 5) + '...');
-  console.log('');
+  // 2. 检查已有微信 Bot Token（已配对过则跳过扫码）
+  const WECHAT_CRED_FILE = path.join(os.homedir(), '.oceanbus-chat', 'wechat-bot.json');
+  const BOT_OB_FILE = path.join(os.homedir(), '.oceanbus-chat', 'wechat-bot-ob.json');
+  let wxToken, wxUserId;
 
-  // 2. Generate QR code and wait for scan
+  if (fs.existsSync(WECHAT_CRED_FILE)) {
+    try {
+      const existing = JSON.parse(fs.readFileSync(WECHAT_CRED_FILE, 'utf-8'));
+      if (existing.token) {
+        wxToken = existing.token;
+        wxUserId = existing.userId;
+        console.log('✅ 微信 Bot 已配对 (用户: ' + (wxUserId || '?').slice(0, 12) + '...)');
+        console.log('   如需重新配对，请删除: ' + WECHAT_CRED_FILE);
+        console.log('');
+      }
+    } catch (_) {}
+  }
+
   const https = require('https');
   const crypto = require('crypto');
   const ILINK_BASE = 'https://ilinkai.weixin.qq.com';
-  const WECHAT_CRED_FILE = path.join(os.homedir(), '.oceanbus-chat', 'wechat-bot.json');
-  const BOT_OB_FILE = path.join(os.homedir(), '.oceanbus-chat', 'wechat-bot-ob.json');
 
-  console.log('正在获取二维码...');
+  // 3. 已有 token 则跳过扫码
+  if (wxToken) {
+    console.log('⏩ 跳过扫码，使用已有微信配对。');
+    console.log('');
+  } else {
+    console.log('');
+    console.log('🌊 WeChat 一键操控 CC');
+    console.log('');
+    console.log('   CC:   ' + ccName);
+    console.log('   OpenID: ' + ccOpenId.slice(0, 5) + '...');
+    console.log('');
+
+    console.log('正在获取二维码...');
   let qrResp;
   try {
     qrResp = await new Promise((resolve, reject) => {
@@ -1656,11 +1678,12 @@ async function cmdWechatUp() {
   }
   if (!wxToken) { console.log('\n⏰ 等待超时\n'); process.exit(1); }
 
-  // 3. Save wechat bot token
-  fs.mkdirSync(path.dirname(WECHAT_CRED_FILE), { recursive: true });
-  fs.writeFileSync(WECHAT_CRED_FILE, JSON.stringify({
-    accountId: 'self', token: wxToken, baseUrl: ILINK_BASE, userId: wxUserId, savedAt: new Date().toISOString()
-  }, null, 2));
+    // Save new wechat bot token
+    fs.mkdirSync(path.dirname(WECHAT_CRED_FILE), { recursive: true });
+    fs.writeFileSync(WECHAT_CRED_FILE, JSON.stringify({
+      accountId: 'self', token: wxToken, baseUrl: ILINK_BASE, userId: wxUserId, savedAt: new Date().toISOString()
+    }, null, 2));
+  } // end if (!wxToken)
 
   // 4. Register Bot's OB identity (separate from CC's)
   let botObCreds;
