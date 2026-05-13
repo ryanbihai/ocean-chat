@@ -41,9 +41,15 @@ async function main() {
     console.error('❌ OB 凭证无效。');
     process.exit(1);
   }
+
+  // Auto-name: from --name flag, or generate from agent_id
+  const agentName = getArg('--name')
+    || 'CC-' + creds.agent_id.slice(0, 6);
+
   console.log('🆔 CC Agent');
-  console.log('   OpenID: ' + creds.openid.slice(0, 5) + '...');
-  console.log('   模式:   ' + (AUTO_EXEC ? '自动执行 (spawn claude)' : '仅显示消息'));
+  console.log('   Name:    ' + agentName);
+  console.log('   OpenID:  ' + creds.openid.slice(0, 5) + '...');
+  console.log('   模式:    ' + (AUTO_EXEC ? '自动执行 (spawn claude)' : '仅显示消息'));
   console.log('');
 
   // 2. Connect OB
@@ -84,10 +90,9 @@ async function main() {
     // Display
     if (process.stdout.isTTY) process.stdout.write('\r\x1b[K');
     console.log('── ' + fromName + ' · ' + time + ' ──');
-    console.log('  Agent: ' + (meta.agent_name || '?'));
-    console.log('  Route: ' + (meta.route_prefix || '?'));
-    console.log('  From:  ' + (meta.from_wx_user || '?').slice(0, 30));
-    console.log('  ' + text);
+    const mode = meta.is_override ? '[临时]' : '[会话]';
+    console.log(`  ${mode} ${meta.route_prefix || '?'} → ${agentName}`);
+    console.log('  ' + text.slice(0, 120));
     console.log('');
 
     // Auto-exec mode
@@ -127,7 +132,7 @@ async function main() {
           meta: {
             to_wx_user: meta.from_wx_user || '',
             reply_to: meta.message_id || '',
-            agent_name: meta.agent_name || 'CC-Agent',
+            agent_name: agentName,
           },
         });
 
@@ -144,7 +149,7 @@ async function main() {
             meta: {
               to_wx_user: meta.from_wx_user || '',
               reply_to: meta.message_id || '',
-              agent_name: meta.agent_name || 'CC-Agent',
+              agent_name: agentName,
             },
           });
           try { await ob.send(replyTo, errorReply); } catch (_) {}
