@@ -10,6 +10,7 @@ const { sendWeixinMessage, resolveWeixinConfig, printSetupGuide } = require('./s
 //
 // Commands:
 //   node chat.js setup                        Register + get your OpenID
+//   node chat.js renew-key                    Rotate keys (keeps same identity)
 //   node chat.js openid                       Show your OpenID
 //   node chat.js add <name> <openid>          Save a contact to Roster
 //   node chat.js contacts                     List saved contacts (from Roster)
@@ -51,6 +52,7 @@ if (!path.isAbsolute(DATA_DIR)) {
   DATA_DIR = abs;
 }
 const CRED_FILE = path.join(DATA_DIR, 'credentials.json');
+const ID_FILE = path.join(DATA_DIR, '.oceanbus-id');  // permanent identity backup
 const CURSOR_FILE = path.join(DATA_DIR, 'cursor.json');
 const DATE_LOG_FILE = path.join(DATA_DIR, 'date-log.json');
 const LEGACY_CONTACTS_FILE = path.join(DATA_DIR, 'contacts.json');
@@ -114,6 +116,24 @@ function loadCredentials() {
   } catch (_) { return null; }
 }
 
+function saveIdFile(agentId, backupKey) {
+  ensureDir();
+  fs.writeFileSync(ID_FILE, JSON.stringify({
+    agent_id: agentId,
+    backup_key: backupKey,
+    created_at: new Date().toISOString()
+  }, null, 2));
+}
+
+function loadIdFile() {
+  if (!fs.existsSync(ID_FILE)) return null;
+  try {
+    const data = JSON.parse(fs.readFileSync(ID_FILE, 'utf-8'));
+    if (data.agent_id && data.backup_key) return data;
+    return null;
+  } catch (_) { return null; }
+}
+
 function saveCursor(seq) {
   ensureDir();
   fs.writeFileSync(CURSOR_FILE, JSON.stringify({ last_seq: seq }));
@@ -159,15 +179,23 @@ async function cmdSetup() {
   if (existing) {
     const roster = getRoster();
     const contacts = await roster.list();
+    const idData = loadIdFile();
 
     console.log('🛡️  身份已存在 — 不会重新注册。');
     console.log('');
-    console.log('你的 OpenID: ' + existing.openid);
-    console.log('你的前5位: ' + existing.openid.slice(0, 5) + '  ← 加联系人时告诉对方这个');
-    console.log('存储位置: ' + CRED_FILE);
+    console.log('你的 agent_id: ' + existing.agent_id);
+    console.log('你的 OpenID:   ' + existing.openid);
+    console.log('你的前5位:     ' + existing.openid.slice(0, 5) + '  ← 加联系人时告诉对方这个');
+    console.log('主 key:        ' + CRED_FILE);
+    if (idData) {
+      console.log('备用 key:      ' + ID_FILE + ' ✅');
+    } else {
+      console.log('备用 key:      未创建。运行 node chat.js renew-key 来备份。');
+    }
     console.log('');
-    console.log('⚠️  绝对不要删除这个文件！删除后 OpenID 永久作废，');
-    console.log('   所有联系人都会发消息到死地址。');
+    console.log('⚠️  删除 credentials.json = 丢失主 key。');
+    console.log('   如果有备用 key，可用 node chat.js setup 恢复。');
+    console.log('   两个文件都删了 = 身份永久丢失，无法恢复。');
     console.log('');
 
     if (contacts.length > 0) {
@@ -184,14 +212,91 @@ async function cmdSetup() {
     return;
   }
 
+  // ── Recovery path: credentials.json missing, but .oceanbus-id exists ──
+  const idData = loadIdFile();
+  if (idData) {
+    console.log('🛡️  检测到备份身份文件 (.oceanbus-id)');
+    console.log('   你的永久身份: agent_id=' + idData.agent_id);
+    console.log('');
+    console.log('   credentials.json 丢失，正在用备用 key 恢复...');
+
+    try {
+      const ob = await createOceanBus({
+        keyStore: { type: 'memory' },
+        identity: { agent_id: idData.agent_id, api_key: idData.backup_key },
+      });
+      const openid = await ob.getAddress();
+
+      // Rotate: create a new primary key
+      let newKey;
+      try {
+        const newKeyData = await ob.createKey();
+        newKey = newKeyData.api_key;
+      } catch (_) {
+        // /me/keys may fail if backup key doesn't have permission
+        newKey = idData.backup_key;
+      }
+
+      // Create a fresh backup key
+      let newBackupKey = null;
+      try {
+        if (newKey !== idData.backup_key) {
+          const ob2 = await createOceanBus({
+            keyStore: { type: 'memory' },
+            identity: { agent_id: idData.agent_id, api_key: newKey },
+          });
+          const bkData = await ob2.createKey();
+          newBackupKey = bkData.api_key;
+          await ob2.destroy();
+        }
+      } catch (_) { /* non-fatal */ }
+
+      saveCredentials(idData.agent_id, newKey, openid);
+      if (newBackupKey) {
+        saveIdFile(idData.agent_id, newBackupKey);
+      }
+
+      console.log('   ✅ 恢复成功！身份不变，key 已轮换。');
+      console.log('');
+      console.log('   你的 agent_id: ' + idData.agent_id + ' (未变)');
+      console.log('   你的 OpenID:   ' + openid);
+      console.log('');
+      if (newBackupKey) {
+        console.log('   主 key 和备用 key 均已更新。');
+      }
+      await ob.destroy();
+      return;
+    } catch (e) {
+      console.log('   ❌ 恢复失败: ' + e.message);
+      console.log('');
+      console.log('   备用 key 已失效。如果你没有任何 key 了，');
+      console.log('   你的身份 (' + idData.agent_id + ') 将永久丢失。');
+      console.log('');
+      console.log('   创建新身份？运行: node chat.js setup --force-new');
+      if (!process.argv.includes('--force-new')) {
+        process.exit(1);
+      }
+      // --force-new: fall through to normal registration
+    }
+  }
+
+  // ── Fresh registration ──
   console.log('正在注册 OceanBus 身份...');
 
   const ob = await createOceanBus({ keyStore: { type: 'memory' } });
   let openid;
   try {
-    const reg = await ob.register();
-    openid = await ob.getOpenId();
+    const reg = await ob.createIdentity();
+    openid = await ob.getAddress();
     saveCredentials(reg.agent_id, reg.api_key, openid);
+
+    // Create a backup key immediately
+    try {
+      const bkData = await ob.createKey();
+      saveIdFile(reg.agent_id, bkData.api_key);
+    } catch (e) {
+      console.warn('⚠  备用 key 创建失败: ' + e.message);
+    }
   } catch (e) {
     if (typeof e.isRateLimited === 'function' && e.isRateLimited()) {
       const wait = e.retryAfterSeconds
@@ -209,14 +314,71 @@ async function cmdSetup() {
   console.log('');
   console.log('注册成功！你的 OceanBus 地址:');
   console.log('');
-  console.log('  ' + openid);
-  console.log('  前5位: ' + openid.slice(0, 5) + '  ← 加联系人时告诉对方这个');
+  console.log('  agent_id: ' + loadCredentials().agent_id + '  ← 永久身份标识');
+  console.log('  OpenID:   ' + openid);
+  console.log('  前5位:    ' + openid.slice(0, 5) + '  ← 加联系人时告诉对方这个');
   console.log('');
-  console.log('现在你可以:');
-  console.log('  ① 把这个 OpenID 发给朋友');
-  console.log('  ② 朋友用: node chat.js add <你的名字> ' + openid);
-  console.log('  ③ 你也加上朋友: node chat.js add <朋友名字> <朋友的OpenID>');
-  console.log('  ④ 开始通信！');
+  console.log('📁 主 key:  ' + CRED_FILE);
+  console.log('📁 备用 key: ' + ID_FILE + ' (已自动创建)');
+  console.log('');
+  console.log('⚠️  重要：credentials.json 和 .oceanbus-id 各存了一把 key。');
+  console.log('   删除一个可以用另一个恢复。两个都删了 = 身份永久丢失。');
+  console.log('   安全做法：把备用 key 也复制到密码管理器。');
+}
+
+
+async function cmdRenewKey() {
+  const creds = loadCredentials();
+  if (!creds) {
+    console.log('尚未注册。运行: node chat.js setup');
+    return;
+  }
+
+  console.log('正在轮换 key...');
+
+  try {
+    const ob = await createOceanBus({
+      keyStore: { type: "memory" },
+      identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
+    });
+
+    // Create new primary key
+    const newKeyData = await ob.createKey();
+    const newKey = newKeyData.api_key;
+
+    // Get OpenID for the new key
+    const ob2 = await createOceanBus({
+      keyStore: { type: "memory" },
+      identity: { agent_id: creds.agent_id, api_key: newKey },
+    });
+    const openid = await ob2.getAddress();
+
+    // Create a new backup key
+    let newBackupKey = null;
+    try {
+      const bkData = await ob2.createKey();
+      newBackupKey = bkData.api_key;
+    } catch (_) { /* non-fatal */ }
+
+    saveCredentials(creds.agent_id, newKey, openid);
+    if (newBackupKey) {
+      saveIdFile(creds.agent_id, newBackupKey);
+    }
+
+    console.log('✅ key 已轮换。');
+    console.log('   agent_id: ' + creds.agent_id + ' (未变)');
+    console.log('   新 OpenID: ' + openid);
+    console.log('   主 key: ' + CRED_FILE + '  已更新');
+    if (newBackupKey) {
+      console.log('   备用 key: ' + ID_FILE + '  已更新');
+    }
+
+    await ob.destroy();
+    await ob2.destroy();
+  } catch (e) {
+    console.error('轮换失败: ' + e.message);
+    console.error('主 key 未被修改。');
+  }
 }
 
 async function cmdOpenId() {
@@ -950,16 +1112,6 @@ async function cmdMonitor({ intervalMs, noAutoReply, autoExec, projectDir }) {
   });
 
   const roster = getRoster();
-  let lastSeq = 0;
-
-  // Try to jump to latest seq on first start
-  try {
-    const res = await ob.http.get('/messages/sync', {
-      apiKey: creds.api_key,
-      query: { since_seq: 0, limit: 1, to_openid: creds.openid },
-    });
-    lastSeq = Number(res.data?.messages?.[0]?.seq_id ?? 0);
-  } catch (_) {}
 
   if (autoExec) {
     console.log('[monitor] 自动执行模式 — 收到消息立即 spawn claude');
@@ -968,106 +1120,75 @@ async function cmdMonitor({ intervalMs, noAutoReply, autoExec, projectDir }) {
   console.log('[monitor] 启动监听 (轮询间隔 ' + intervalMs + 'ms, openid=' + creds.openid.slice(0, 5) + '...)');
   console.log('');
 
-  // Main polling loop
-  let running = true;
-  process.on('SIGINT', () => { running = false; });
-  process.on('SIGTERM', () => { running = false; });
+  // Use SDK's startMonitor — handles polling, cursor, self-skip, error backoff internally
+  const stop = ob.startMonitor(async (msg) => {
+    const from = msg.from_openid ?? '';
+    const content = msg.content ?? '';
 
-  let consecutiveErrors = 0;
+    // Resolve sender name from roster
+    let contact = await roster.findByOpenId(from);
+    const fromName = contact ? contact.name : from.slice(0, 5);
+    const displayText = (content || '').slice(0, 300);
 
-  while (running) {
-    try {
-      const res = await ob.http.get('/messages/sync', {
-        apiKey: creds.api_key,
-        query: { since_seq: lastSeq, limit: 10, to_openid: creds.openid },
-      });
+    console.log('── 来自 ' + fromName + ' (' + from.slice(0, 5) + '...) ──');
+    console.log('  ' + (msg.created_at || ''));
+    console.log('');
+    console.log(displayText);
+    console.log('');
 
-      const messages = res.data?.messages ?? [];
-      consecutiveErrors = 0;
-
-      for (const msg of messages) {
-        const seq = Number(msg.seq_id ?? 0);
-        const from = msg.from_openid ?? '';
-        const content = msg.content ?? '';
-
-        if (seq > lastSeq) lastSeq = seq;
-
-        // Skip self-sent messages (prevent echo loop)
-        if (from === creds.openid) continue;
-
-        // Resolve sender name from roster
-        let contact = await roster.findByOpenId(from);
-        const fromName = contact ? contact.name : from.slice(0, 5);
-        const displayText = (content || '').slice(0, 300);
-
-        console.log('── 来自 ' + fromName + ' (' + from.slice(0, 5) + '...) ──');
-        console.log('  ' + (msg.created_at || ''));
-        console.log('');
-        console.log(displayText);
-        console.log('');
-
-        // 1. Push to WeChat
-        if (wxEnabled) {
-          const wxText = '🔔 ' + fromName + '\n' + displayText;
-          try {
-            await sendWeixinMessage({ token: wxToken, baseUrl: wxBaseUrl, toUserId: wxUserId, text: wxText });
-            console.log('[monitor] ✅ 微信通知成功');
-          } catch (wxErr) {
-            console.warn('[monitor] ⚠️ 微信通知失败:', wxErr.message);
-          }
-        }
-
-        // 2. Auto-reply
-        if (!noAutoReply && content.trim()) {
-          try {
-            await ob.send(from, '✅ 已收到您的消息');
-          } catch (sendErr) {
-            console.error('[monitor] 自动回复失败:', sendErr.message);
-          }
-        }
-
-        // 3. Auto-exec (spawn claude)
-        if (autoExec && content.trim()) {
-          const prompt = content;
-          const label = fromName;
-          console.log('[auto-exec] 开始执行: ' + label);
-          try {
-            const result = await new Promise((resolve, reject) => {
-              const child = spawn('claude', ['-p', prompt, '--dangerously-skip-permissions'], {
-                cwd: projectDir || process.cwd(),
-                stdio: ['ignore', 'pipe', 'pipe'],
-              });
-              const timer = setTimeout(() => { child.kill(); reject(new Error('执行超时')); }, 300000);
-              let out = '', err = '';
-              child.stdout.on('data', d => out += d);
-              child.stderr.on('data', d => err += d);
-              child.on('close', code => {
-                clearTimeout(timer);
-                if (code === 0 && out.trim()) resolve(out.trim());
-                else reject(new Error(err.trim() || 'exit ' + code));
-              });
-              child.on('error', e => { clearTimeout(timer); reject(e); });
-            });
-            console.log('[auto-exec] 完成，回报 ' + label);
-            await ob.send(from, result);
-          } catch (e) {
-            console.error('[auto-exec] 失败:', e.message);
-            try { await ob.send(from, '任务执行失败: ' + e.message); } catch (_) {}
-          }
-        }
-      }
-    } catch (err) {
-      consecutiveErrors++;
-      console.error('[monitor] sync 错误 (' + consecutiveErrors + '):', err.message);
-      if (consecutiveErrors >= 5) {
-        console.error('[monitor] 连续错误，退避 30s');
-        await new Promise(r => setTimeout(r, 30000));
-        consecutiveErrors = 0;
+    // Auto-exec (spawn claude)
+    if (autoExec && content.trim()) {
+      const prompt = content;
+      const label = fromName;
+      console.log('[auto-exec] 开始执行: ' + label);
+      try {
+        const result = await new Promise((resolve, reject) => {
+          const child = spawn('claude', ['-p', prompt, '--dangerously-skip-permissions'], {
+            cwd: projectDir || process.cwd(),
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+          const timer = setTimeout(() => { child.kill(); reject(new Error('执行超时')); }, 300000);
+          let out = '', err = '';
+          child.stdout.on('data', d => out += d);
+          child.stderr.on('data', d => err += d);
+          child.on('close', code => {
+            clearTimeout(timer);
+            if (code === 0 && out.trim()) resolve(out.trim());
+            else reject(new Error(err.trim() || 'exit ' + code));
+          });
+          child.on('error', e => { clearTimeout(timer); reject(e); });
+        });
+        console.log('[auto-exec] 完成，回报 ' + label);
+        await ob.send(from, result);
+      } catch (e) {
+        console.error('[auto-exec] 失败:', e.message);
+        try { await ob.send(from, '任务执行失败: ' + e.message); } catch (_) {}
       }
     }
+  }, {
+    intervalMs,
+    skipSelf: true,
+    autoReply: noAutoReply ? undefined : '✅ 已收到您的消息',
+    onNotify: wxEnabled ? async (msg) => {
+      const content = (msg.content || '').slice(0, 300);
+      let contact = await roster.findByOpenId(msg.from_openid);
+      const name = contact ? contact.name : (msg.from_openid || '').slice(0, 5);
+      try {
+        await sendWeixinMessage({ token: wxToken, baseUrl: wxBaseUrl, toUserId: wxUserId, text: '🔔 ' + name + '\n' + content });
+        console.log('[monitor] ✅ 微信通知成功');
+      } catch (wxErr) {
+        console.warn('[monitor] ⚠️ 微信通知失败:', wxErr.message);
+      }
+    } : undefined,
+    onError: (err) => { console.error('[monitor]', err.message); },
+  });
 
-    await new Promise(r => setTimeout(r, intervalMs));
-  }
+  // Keep process alive until SIGINT/SIGTERM
+  await new Promise((resolve) => {
+    const cleanup = () => { stop(); resolve(); };
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+  });
 
   console.log('[monitor] 正常退出');
   await ob.destroy();
@@ -1343,8 +1464,8 @@ async function cmdConnectCC() {
     fs.mkdirSync(dataDir, { recursive: true });
     const ob = await createOceanBus({ keyStore: { type: 'memory' } });
     try {
-      const reg = await ob.register();
-      const openid = await ob.getOpenId();
+      const reg = await ob.createIdentity();
+      const openid = await ob.getAddress();
       creds = { agent_id: reg.agent_id, api_key: reg.api_key, openid, source: SKILL_SOURCE, created_at: new Date().toISOString() };
       fs.writeFileSync(credFile, JSON.stringify(creds, null, 2));
     } catch (e) {
@@ -1432,8 +1553,8 @@ async function cmdPairMe(xlxOpenId) {
     ensureDir();
     const ob = await createOceanBus({ keyStore: { type: 'memory' } });
     try {
-      const reg = await ob.register();
-      const openid = await ob.getOpenId();
+      const reg = await ob.createIdentity();
+      const openid = await ob.getAddress();
       creds = { agent_id: reg.agent_id, api_key: reg.api_key, openid, source: SKILL_SOURCE, created_at: new Date().toISOString() };
       fs.writeFileSync(CRED_FILE, JSON.stringify(creds, null, 2));
     } catch (e) {
@@ -1553,6 +1674,7 @@ async function main() {
     console.log('命令:');
     console.log('  node chat.js connect-cc                 一键配通：注册身份、生成配对消息');
     console.log('  node chat.js setup                      注册 + 获取你的 OpenID');
+    console.log('  node chat.js renew-key                  轮换 key（身份不变）');
     console.log('  node chat.js openid                     查看你的 OpenID');
     console.log('  node chat.js add <名字> <OpenID>        添加联系人（存入 Roster）');
     console.log('  node chat.js contacts                   查看通讯录（读取 Roster）');
@@ -1604,6 +1726,9 @@ async function main() {
     switch (cmd) {
       case 'setup':
         await cmdSetup();
+        break;
+      case 'renew-key':
+        await cmdRenewKey();
         break;
       case 'openid':
         await cmdOpenId();
