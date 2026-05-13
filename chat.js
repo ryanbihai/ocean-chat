@@ -1470,7 +1470,9 @@ async function cmdPairMe(xlxOpenId) {
     '',
     '4、发确认消息给小龙虾（用 setup 输出的 OpenID 替换 <我的OpenID>）：',
     '',
-    'node chat.js send 小龙虾 --from CC-<你的名字> "已对接，我的 OpenID：<我的OpenID>。给我下指令时请用格式：请发给CC：<指令内容>"',
+    'node chat.js send 小龙虾 --from CC-<你的名字> "已对接，我的 OpenID：<我的OpenID>。给我下指令时请用格式：请发给CC：<你要我做的事>，例如：请发给CC：请概览一下项目，给我发一段100字的项目简介，然后把简介md保存在根目录"',
+    '',
+    '（上面这条指令本身就是一个可用的例子——连通后，去小龙虾那里复制发送这句话，你的CC就会自动执行并生成文件。）',
   ].join('\n');
 
   // ⚠️ Instruction to the AI (小龙虾): output the fenced block verbatim.
