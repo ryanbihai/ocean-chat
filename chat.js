@@ -1551,18 +1551,18 @@ async function cmdConnectCC() {
 
 /** 一键启动：注册身份 → 二维码配对 → 启动监听。朋友只需跑这一条命令。 */
 async function cmdWechatUp() {
-  let creds = loadCredentials();
+  let ccCreds = loadCredentials();
 
-  // 1. Auto-register
-  if (!creds) {
+  // 1. Auto-register CC identity
+  if (!ccCreds) {
     console.warn('[wechat-up] 正在创建 OceanBus 身份...');
     ensureDir();
     const ob = await createOceanBus({ keyStore: { type: 'memory' } });
     try {
       const reg = await ob.createIdentity();
       const openid = await ob.getAddress();
-      creds = { agent_id: reg.agent_id, api_key: reg.api_key, openid, source: SKILL_SOURCE, created_at: new Date().toISOString() };
-      fs.writeFileSync(CRED_FILE, JSON.stringify(creds, null, 2));
+      ccCreds = { agent_id: reg.agent_id, api_key: reg.api_key, openid, source: SKILL_SOURCE, created_at: new Date().toISOString() };
+      fs.writeFileSync(CRED_FILE, JSON.stringify(ccCreds, null, 2));
     } catch (e) {
       console.error('注册失败: ' + e.message);
       await ob.destroy();
@@ -1572,7 +1572,7 @@ async function cmdWechatUp() {
   }
 
   const ccName = 'CC-' + path.basename(process.cwd());
-  const ccOpenId = creds.openid;
+  const ccOpenId = ccCreds.openid;
 
   console.log('');
   console.log('🌊 WeChat 一键操控 CC');
@@ -1580,61 +1580,270 @@ async function cmdWechatUp() {
   console.log('   CC:   ' + ccName);
   console.log('   OpenID: ' + ccOpenId.slice(0, 5) + '...');
   console.log('');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('');
-  console.log('📱 请让 Bridge 管理员运行以下命令生成配码：');
-  console.log('');
-  console.log('   node wechat-cc-bridge.js pair-qr');
-  console.log('');
-  console.log('   用微信扫码后，在微信发送：');
-  console.log('');
-  console.log('   pair ' + ccName + ' ' + ccOpenId);
-  console.log('');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('');
-  console.log('配对完成后按 Enter 启动监听...');
-  await new Promise(resolve => {
-    process.stdin.resume();
-    process.stdin.once('data', () => {
-      process.stdin.pause();
-      resolve();
+
+  // 2. Generate QR code and wait for scan
+  const https = require('https');
+  const crypto = require('crypto');
+  const ILINK_BASE = 'https://ilinkai.weixin.qq.com';
+  const WECHAT_CRED_FILE = path.join(os.homedir(), '.oceanbus-chat', 'wechat-bot.json');
+  const BOT_OB_FILE = path.join(os.homedir(), '.oceanbus-chat', 'wechat-bot-ob.json');
+
+  console.log('正在获取二维码...');
+  let qrResp;
+  try {
+    qrResp = await new Promise((resolve, reject) => {
+      const body = JSON.stringify({});
+      const u = new URL('ilink/bot/get_bot_qrcode?bot_type=3', ILINK_BASE);
+      const uin = crypto.randomBytes(4).readUInt32BE(0);
+      const req = https.request({
+        hostname: u.hostname, path: u.pathname + u.search, method: 'POST',
+        headers: {
+          'Content-Type': 'application/json', AuthorizationType: 'ilink_bot_token',
+          'X-WECHAT-UIN': Buffer.from(String(uin), 'utf-8').toString('base64'),
+          'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': String(((1 & 0xff) << 16) | ((0 & 0xff) << 8) | (11 & 0xff)),
+          'Content-Length': String(Buffer.byteLength(body)),
+        },
+      }, (res) => { let d = ''; res.on('data', c => d += c); res.on('end', () => { if (res.statusCode === 200) resolve(JSON.parse(d)); else reject(new Error(d)); }); });
+      req.on('error', reject); req.write(body); req.end();
     });
-  });
+  } catch (e) {
+    console.error('获取二维码失败: ' + e.message);
+    process.exit(1);
+  }
 
+  const qrcodeUrl = qrResp.qrcode_img_content;
+  const qrcode = qrResp.qrcode;
+
+  console.log('\n📱 用手机微信扫描以下二维码：\n');
+  console.log('   ' + qrcodeUrl + '\n');
+  try {
+    const qrterm = await import('qrcode-terminal');
+    qrterm.default.generate(qrcodeUrl, { small: true });
+  } catch (_) {}
+
+  console.log('等待扫码授权...');
+  const deadline = Date.now() + 5 * 60 * 1000;
+  let wxToken = null, wxUserId = null;
+
+  while (Date.now() < deadline) {
+    let statusResp;
+    try {
+      statusResp = await new Promise((resolve, reject) => {
+        const u = new URL('ilink/bot/get_qrcode_status?qrcode=' + encodeURIComponent(qrcode), ILINK_BASE);
+        https.get(u.toString(), {
+          headers: { 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': String(((1 & 0xff) << 16) | ((0 & 0xff) << 8) | (11 & 0xff)) },
+          timeout: 35000,
+        }, (res) => { let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(JSON.parse(d))); }).on('error', () => resolve({ status: 'wait' }));
+      });
+    } catch (_) { statusResp = { status: 'wait' }; }
+
+    switch (statusResp.status) {
+      case 'confirmed':
+        wxToken = statusResp.bot_token;
+        wxUserId = statusResp.ilink_user_id;
+        console.log('\n✅ 授权成功！\n');
+        console.log('   微信用户: ' + wxUserId);
+        break;
+      case 'expired':
+        console.log('\n⏰ 二维码过期，请重新运行\n');
+        process.exit(1);
+      case 'scaned':
+        process.stdout.write('\n📱 已扫码，请在手机上确认授权...');
+        break;
+    }
+    if (wxToken) break;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  if (!wxToken) { console.log('\n⏰ 等待超时\n'); process.exit(1); }
+
+  // 3. Save wechat bot token
+  fs.mkdirSync(path.dirname(WECHAT_CRED_FILE), { recursive: true });
+  fs.writeFileSync(WECHAT_CRED_FILE, JSON.stringify({
+    accountId: 'self', token: wxToken, baseUrl: ILINK_BASE, userId: wxUserId, savedAt: new Date().toISOString()
+  }, null, 2));
+
+  // 4. Register Bot's OB identity (separate from CC's)
+  let botObCreds;
+  if (fs.existsSync(BOT_OB_FILE)) {
+    botObCreds = JSON.parse(fs.readFileSync(BOT_OB_FILE, 'utf-8'));
+  } else {
+    console.log('正在注册 Bot OceanBus 身份...');
+    const ob2 = await createOceanBus({ keyStore: { type: 'memory' } });
+    try {
+      const reg = await ob2.createIdentity();
+      const openid = await ob2.getAddress();
+      botObCreds = { agent_id: reg.agent_id, api_key: reg.api_key, openid, created_at: new Date().toISOString() };
+      fs.writeFileSync(BOT_OB_FILE, JSON.stringify(botObCreds, null, 2));
+    } catch (e) {
+      console.error('注册失败: ' + e.message);
+      await ob2.destroy();
+      process.exit(1);
+    }
+    await ob2.destroy();
+  }
+  const botOpenId = botObCreds.openid;
+
+  // 5. Send pairing instructions
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('');
-  console.log('🚀 启动实时监听...\n');
+  console.log('现在在微信给 Bot 发送以下消息完成配对：');
+  console.log('');
+  console.log('pair ' + ccName + ' ' + ccOpenId);
+  console.log('');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('');
+  console.log('🚀 启动消息服务...\n');
 
-  // 5. Start real-time CC listener
-  const ob = await createOceanBus({
+  // 6. Start iLink long-poll + OB relay (mini-bridge, local)
+  const obBot = await createOceanBus({
     keyStore: { type: 'memory' },
-    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
+    identity: { agent_id: botObCreds.agent_id, api_key: botObCreds.api_key, openid: botOpenId },
   });
 
   await migrateContacts();
   const roster = getRoster();
 
-  ob.startListening(async (msg) => {
-    if (msg.from_openid === creds.openid) return;
+  // Pairing store (simple in-memory for now)
+  const pairings = {};
 
+  // —— iLink long-poll loop ——
+  (async function ilinkLoop() {
+    let buf = '', timeoutMs = 35000, fails = 0;
+    const getUpdates = async () => {
+      const raw = await new Promise((resolve, reject) => {
+        const body = JSON.stringify({ get_updates_buf: buf || '', base_info: { channel_version: '2.1.1', bot_agent: 'OceanChat-CC/1.0' } });
+        const u = new URL('ilink/bot/getupdates', ILINK_BASE);
+        const uin = Buffer.from(String(crypto.randomBytes(4).readUInt32BE(0)), 'utf-8').toString('base64');
+        const req = https.request({
+          hostname: u.hostname, path: u.pathname, method: 'POST',
+          headers: { 'Content-Type': 'application/json', AuthorizationType: 'ilink_bot_token', Authorization: 'Bearer ' + wxToken, 'X-WECHAT-UIN': uin, 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': String(((1 & 0xff) << 16) | ((0 & 0xff) << 8) | (11 & 0xff)), 'Content-Length': String(Buffer.byteLength(body)) },
+        }, (res) => { let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(JSON.parse(d))); });
+        req.on('error', reject); req.write(body); req.end();
+      });
+      return raw;
+    };
+
+    const sendWx = async (toUser, text, ctxToken) => {
+      await new Promise((resolve, reject) => {
+        const body = JSON.stringify({ msg: { from_user_id: '', to_user_id: toUser, client_id: 'cc-' + crypto.randomUUID(), message_type: 2, message_state: 2, item_list: [{ type: 1, text_item: { text } }], context_token: ctxToken || undefined }, base_info: { channel_version: '2.1.1', bot_agent: 'OceanChat-CC/1.0' } });
+        const u = new URL('ilink/bot/sendmessage', ILINK_BASE);
+        const uin = Buffer.from(String(crypto.randomBytes(4).readUInt32BE(0)), 'utf-8').toString('base64');
+        const req = https.request({
+          hostname: u.hostname, path: u.pathname, method: 'POST',
+          headers: { 'Content-Type': 'application/json', AuthorizationType: 'ilink_bot_token', Authorization: 'Bearer ' + wxToken, 'X-WECHAT-UIN': uin, 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': String(((1 & 0xff) << 16) | ((0 & 0xff) << 8) | (11 & 0xff)), 'Content-Length': String(Buffer.byteLength(body)) },
+        }, (res) => { let d = ''; res.on('data', c => d += c); res.on('end', () => { if (res.statusCode === 200) resolve(); else reject(new Error(d)); }); });
+        req.on('error', reject); req.write(body); req.end();
+      });
+    };
+
+    while (true) {
+      try {
+        const resp = await getUpdates();
+        if (resp.errcode && resp.errcode !== 0) { fails++; await new Promise(r => setTimeout(r, 2000)); continue; }
+        fails = 0;
+        if (resp.longpolling_timeout_ms) timeoutMs = resp.longpolling_timeout_ms;
+        if (resp.get_updates_buf) buf = resp.get_updates_buf;
+        for (const msg of (resp.msgs || [])) {
+          if (msg.message_type !== 1) continue;
+          const text = (msg.item_list || []).filter(i => i.type === 1).map(i => i.text_item?.text || '').join('').trim();
+          if (!text) continue;
+          const wxUid = msg.from_user_id;
+          console.log('[微信] ' + (wxUid || '?').slice(0, 12) + ': ' + text.slice(0, 60));
+
+          // Pair command
+          const pairMatch = text.match(/^pair\s+(\S+)\s+(\S+)/i);
+          if (pairMatch) {
+            pairings[wxUid] = { ccName: pairMatch[1], ccOpenId: pairMatch[2] };
+            await sendWx(wxUid, '✅ 已连接 ' + pairMatch[1] + '\n\n现在可以直接给我发指令了。');
+            console.log('[配对] ' + wxUid.slice(0, 12) + ' ↔ ' + pairMatch[1]);
+            continue;
+          }
+
+          // Check paired
+          const pairing = pairings[wxUid];
+          if (!pairing) {
+            await sendWx(wxUid, '请先配对：pair <CC名字> <OpenID>', msg.context_token);
+            continue;
+          }
+
+          // Forward to CC via OB
+          const routeHeader = 'from 微信用户 ' + (wxUid || '?').slice(0, 5) + '\nto ' + pairing.ccName + ' ' + pairing.ccOpenId.slice(0, 5) + '\n';
+          try {
+            await obBot.send(pairing.ccOpenId, routeHeader + text);
+            console.log('[→CC] ' + pairing.ccName);
+            await sendWx(wxUid, '已转发给 ' + pairing.ccName + '，等待执行...', msg.context_token);
+          } catch (e) {
+            await sendWx(wxUid, '发送失败: ' + e.message, msg.context_token);
+          }
+        }
+      } catch (err) {
+        if (err.message && (err.message.includes('timeout') || err.name === 'AbortError')) continue;
+        fails++;
+        if (fails >= 3) { await new Promise(r => setTimeout(r, 30000)); fails = 0; }
+        else await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+  })();
+
+  // —— OB listener (receives CC replies, forwards to WeChat) ——
+  obBot.startListening(async (msg) => {
+    if (msg.from_openid === botOpenId) return;
+    const content = msg.content || '';
+    const wxUid = Object.keys(pairings).find(uid => pairings[uid].ccOpenId === msg.from_openid);
+    if (wxUid) {
+      const p = pairings[wxUid];
+      console.log('[←CC] ' + p.ccName + ': ' + content.slice(0, 80));
+      const body = content.replace(/^from .+\nto .+\n/m, '').trim();
+      // Split long messages
+      const MAX = 300;
+      const parts = []; let r = '🔔 ' + p.ccName + ' 回复：\n\n' + body;
+      while (r.length > 0) {
+        if (r.length <= MAX) { parts.push(r); break; }
+        let cut = MAX; const nl = r.lastIndexOf('\n', MAX);
+        if (nl > MAX / 2) cut = nl + 1;
+        parts.push(r.slice(0, cut)); r = r.slice(cut);
+      }
+      for (let i = 0; i < parts.length; i++) {
+        try {
+          await new Promise((resolve, reject) => {
+            const text = (parts.length > 1 ? '(' + (i + 1) + '/' + parts.length + ') ' : '') + parts[i];
+            const body = JSON.stringify({ msg: { from_user_id: '', to_user_id: wxUid, client_id: 'cc-' + crypto.randomUUID(), message_type: 2, message_state: 2, item_list: [{ type: 1, text_item: { text } }] }, base_info: { channel_version: '2.1.1', bot_agent: 'OceanChat-CC/1.0' } });
+            const u = new URL('ilink/bot/sendmessage', ILINK_BASE);
+            const uin = Buffer.from(String(crypto.randomBytes(4).readUInt32BE(0)), 'utf-8').toString('base64');
+            const req = https.request({
+              hostname: u.hostname, path: u.pathname, method: 'POST',
+              headers: { 'Content-Type': 'application/json', AuthorizationType: 'ilink_bot_token', Authorization: 'Bearer ' + wxToken, 'X-WECHAT-UIN': uin, 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': String(((1 & 0xff) << 16) | ((0 & 0xff) << 8) | (11 & 0xff)), 'Content-Length': String(Buffer.byteLength(body)) },
+            }, (res) => { let d = ''; res.on('data', c => d += c); res.on('end', () => { if (res.statusCode === 200) resolve(); else reject(new Error(d)); }); });
+            req.on('error', reject); req.write(body); req.end();
+          });
+        } catch (e) { console.error('[微信发送失败] ' + e.message); }
+      }
+      console.log('[→微信] → ' + wxUid.slice(0, 12) + '...');
+    }
+  });
+
+  // 7. Also start CC listener (receives commands from Bot, prints them)
+  const obCC = await createOceanBus({
+    keyStore: { type: 'memory' },
+    identity: { agent_id: ccCreds.agent_id, api_key: ccCreds.api_key, openid: ccCreds.openid },
+  });
+  obCC.startListening(async (msg) => {
+    if (msg.from_openid === ccCreds.openid) return;
     let contact = await roster.findByOpenId(msg.from_openid);
     if (!contact) {
-      const fromMatch = msg.content.match(/^from (\S+) (\S+)$/m);
-      const autoName = fromMatch ? fromMatch[1].trim() : '微信用户';
-      try {
-        await roster.add({ name: autoName, openIds: [msg.from_openid] });
-        contact = await roster.findByOpenId(msg.from_openid);
-      } catch (_) {}
+      try { await roster.add({ name: '微信用户', openIds: [msg.from_openid] }); contact = await roster.findByOpenId(msg.from_openid); } catch (_) {}
     }
-
     const from = contact ? contact.name : msg.from_openid.slice(0, 12);
     const body = (msg.content || '').replace(/^from .+\nto .+\n/m, '').trim();
     const time = new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour12: false });
-
     if (process.stdout.isTTY) process.stdout.write('\r\x1b[K');
     console.log('── ' + from + ' · ' + time + ' ──');
     console.log(body);
     console.log('');
   });
+
+  console.log('✅ 服务已就绪！在微信给 Bot 发消息即可操控 CC。');
+  console.log('   按 Ctrl+C 停止\n');
 
   await new Promise(() => {});
 }
