@@ -22,6 +22,7 @@ const os = require('os');
 const ILINK_BASE_URL = 'https://ilinkai.weixin.qq.com';
 const CRED_DIR = path.join(os.homedir(), '.oceanbus-chat');
 const WECHAT_CRED_FILE = path.join(CRED_DIR, 'wechat-bot.json');
+const TOKENS_FILE = path.join(CRED_DIR, 'wechat-bot-tokens.json');
 const OB_CRED_FILE = path.join(CRED_DIR, 'wechat-bot-ob.json');
 const PAIRING_FILE = path.join(CRED_DIR, 'wechat-cc-pairings.json');
 const SYNC_FILE = path.join(CRED_DIR, 'wechat-bot-sync.json');
@@ -62,6 +63,26 @@ function loadWechatCreds() {
     if (fs.existsSync(WECHAT_CRED_FILE)) return JSON.parse(fs.readFileSync(WECHAT_CRED_FILE, 'utf-8'));
   } catch (_) {}
   return null;
+}
+
+// ── 多 Token 管理 ──────────────────────────────────────────────
+function loadAllTokens() {
+  try {
+    if (fs.existsSync(TOKENS_FILE)) return JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf-8'));
+  } catch (_) {}
+  return [];
+}
+function saveAllTokens(list) {
+  fs.mkdirSync(CRED_DIR, { recursive: true });
+  fs.writeFileSync(TOKENS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+}
+function addToken(t) {
+  const list = loadAllTokens();
+  // 去重
+  if (!list.some(x => x.accountId === t.accountId)) {
+    list.push({ ...t, addedAt: new Date().toISOString() });
+    saveAllTokens(list);
+  }
 }
 
 function loadObCreds() {
@@ -284,12 +305,22 @@ async function startBridge() {
     process.exit(1);
   }
 
+  // 把初始 token 加入多 Token 池
+  addToken({
+    accountId: wxCreds.accountId || 'primary',
+    token: wxCreds.token,
+    baseUrl: wxCreds.baseUrl || ILINK_BASE_URL,
+    userId: wxCreds.userId || '',
+  });
+
   const obCreds = await setupObIdentity();
   const botOpenId = obCreds.openid;
 
+  const tokens = loadAllTokens();
   console.log('\n🌊 OceanChat WeChat ↔ CC Bridge 启动');
   console.log('   Bot OpenID: ' + botOpenId);
   console.log('   前5位:      ' + botOpenId.slice(0, 5) + '  ← 告诉 CC 这个');
+  console.log('   Token 池:   ' + tokens.length + ' 个');
   console.log('   已配对 CC:  ' + Object.keys(loadPairings()).length + ' 个');
   console.log('   按 Ctrl+C 停止\n');
 
@@ -300,19 +331,17 @@ async function startBridge() {
     identity: { agent_id: obCreds.agent_id, api_key: obCreds.api_key, openid: obCreds.openid },
   });
 
-  // OB sender（复用同一个连接）
   const obSender = async (targetOpenId, content) => {
     await ob.send(targetOpenId, content);
   };
 
-  // OB 实时监听（WebSocket，替代轮询）
+  // OB 实时监听（WebSocket）
   ob.startListening(async (msg) => {
-    if (msg.from_openid === botOpenId) return; // skip self
+    if (msg.from_openid === botOpenId) return;
 
     const fromOpenId = msg.from_openid;
     const content = msg.content || '';
 
-    // 查找哪个微信用户配对了这个 CC OpenID
     const pairings = loadPairings();
     const wxUserId = Object.keys(pairings).find(
       uid => pairings[uid].ccOpenId === fromOpenId
@@ -322,103 +351,177 @@ async function startBridge() {
       const pairing = pairings[wxUserId];
       console.log(`[←OB] ${pairing.ccName}: ${content.slice(0, 80)}`);
       try {
-        // 剥离路由头
         const body = content.replace(/^from .+\nto .+\n/m, '').trim();
-        await sendWechatMessage(wxCreds.token, wxUserId,
-          `🔔 ${pairing.ccName} 回复：\n\n${body}`
-        );
-        console.log(`[→微信] → ${wxUserId.slice(0, 12)}...`);
+        // 用第一个 token 发送（token 可能已过期，遍历尝试）
+        let sent = false;
+        for (const t of loadAllTokens()) {
+          try {
+            await sendWechatMessage(t.token, wxUserId,
+              `🔔 ${pairing.ccName} 回复：\n\n${body}`
+            );
+            sent = true;
+            break;
+          } catch (_) {}
+        }
+        if (sent) console.log(`[→微信] → ${wxUserId.slice(0, 12)}...`);
+        else console.error(`[→微信] 所有 token 发送失败`);
       } catch (e) {
         console.error(`[微信发送失败] ${e.message}`);
       }
     }
   });
 
-  // ── 启动 iLink 长轮询（收微信消息） ─────────────────────────
-  let buf = '';
-  try {
-    if (fs.existsSync(SYNC_FILE)) {
-      buf = JSON.parse(fs.readFileSync(SYNC_FILE, 'utf-8')).get_updates_buf || '';
-    }
-  } catch (_) {}
+  // ── 启动 iLink 长轮询（每个 Token 一个独立循环） ────────────
+  function startIlinkLoop(tok) {
+    (async () => {
+      let buf = '';
+      let consecutiveFailures = 0;
+      let timeoutMs = 35000;
+      const label = (tok.accountId || tok.userId || '?').slice(0, 12);
 
-  let consecutiveFailures = 0;
-  let timeoutMs = 35000;
+      while (true) {
+        try {
+          const resp = await getUpdates(tok.token, buf, timeoutMs);
 
-  while (true) {
-    try {
-      const resp = await getUpdates(wxCreds.token, buf, timeoutMs);
+          if (resp.errcode && resp.errcode !== 0) {
+            consecutiveFailures++;
+            if (consecutiveFailures >= 3) {
+              console.error(`[iLink ${label}] 连续失败，退避 30s`);
+              await new Promise(r => setTimeout(r, 30000));
+              consecutiveFailures = 0;
+            } else {
+              await new Promise(r => setTimeout(r, 2000));
+            }
+            continue;
+          }
+          consecutiveFailures = 0;
 
-      if (resp.errcode && resp.errcode !== 0) {
-        consecutiveFailures++;
-        if (consecutiveFailures >= 3) { await new Promise(r => setTimeout(r, 30000)); consecutiveFailures = 0; }
-        else await new Promise(r => setTimeout(r, 2000));
-        continue;
-      }
-      consecutiveFailures = 0;
+          if (resp.longpolling_timeout_ms) timeoutMs = resp.longpolling_timeout_ms;
+          if (resp.get_updates_buf) buf = resp.get_updates_buf;
 
-      if (resp.longpolling_timeout_ms) timeoutMs = resp.longpolling_timeout_ms;
-      if (resp.get_updates_buf) {
-        buf = resp.get_updates_buf;
-        fs.writeFileSync(SYNC_FILE, JSON.stringify({ get_updates_buf: buf }));
-      }
-
-      for (const msg of (resp.msgs || [])) {
-        if (msg.message_type !== 1) continue;
-        const reply = await handleWechatMessage(msg, wxCreds.token, obSender);
-        if (reply) {
-          try {
-            await sendWechatMessage(wxCreds.token, msg.from_user_id, reply, msg.context_token);
-            console.log(`[→微信] → ${msg.from_user_id.slice(0, 12)}...`);
-          } catch (e) {
-            console.error(`[微信发送失败] ${e.message}`);
+          for (const msg of (resp.msgs || [])) {
+            if (msg.message_type !== 1) continue;
+            const reply = await handleWechatMessage(msg, tok.token, obSender);
+            if (reply) {
+              try {
+                await sendWechatMessage(tok.token, msg.from_user_id, reply, msg.context_token);
+                console.log(`[→微信] → ${msg.from_user_id.slice(0, 12)}...`);
+              } catch (e) {
+                console.error(`[微信发送失败] ${e.message}`);
+              }
+            }
+          }
+        } catch (err) {
+          if (err.message.includes('timeout') || err.name === 'AbortError') continue;
+          consecutiveFailures++;
+          console.error(`[iLink ${label}] ${err.message} (${consecutiveFailures}/3)`);
+          if (consecutiveFailures >= 3) {
+            await new Promise(r => setTimeout(r, 30000));
+            consecutiveFailures = 0;
+          } else {
+            await new Promise(r => setTimeout(r, 2000));
           }
         }
       }
-    } catch (err) {
-      if (err.message.includes('timeout') || err.name === 'AbortError') continue;
-      consecutiveFailures++;
-      console.error(`[错误] ${err.message} (${consecutiveFailures}/3)`);
-      if (consecutiveFailures >= 3) { await new Promise(r => setTimeout(r, 30000)); consecutiveFailures = 0; }
-      else await new Promise(r => setTimeout(r, 2000));
-    }
+    })();
   }
+
+  // 为每个 token 启动独立的 iLink 长轮询
+  for (const tok of tokens) {
+    startIlinkLoop(tok);
+    console.log(`   [iLink] 监听 ${(tok.userId || tok.accountId || '?').slice(0, 12)}...`);
+  }
+
+  // 定期刷新 token 池（pair-qr 可能添加了新 token）
+  (async function tokenWatcher() {
+    let lastCount = tokens.length;
+    while (true) {
+      await new Promise(r => setTimeout(r, 5000));
+      const fresh = loadAllTokens();
+      if (fresh.length > lastCount) {
+        // 只为新增的 token 启动监听
+        for (let i = lastCount; i < fresh.length; i++) {
+          startIlinkLoop(fresh[i]);
+          console.log(`   [iLink] 新增监听 ${(fresh[i].userId || fresh[i].accountId || '?').slice(0, 12)}...`);
+        }
+        lastCount = fresh.length;
+      }
+    }
+  })();
+
+  // 保持进程存活
+  await new Promise(() => {});
 }
 
 // ── 生成配对 QR 码（给 CC 端展示） ────────────────────────────
 
 async function generatePairQR() {
-  const wxCreds = loadWechatCreds();
-  if (!wxCreds || !wxCreds.token) {
-    console.log('❌ 微信 Bot 未登录，请先运行: node wechat-bot.js login');
-    process.exit(1);
-  }
-
   const obCreds = loadObCreds();
   const botOpenId = obCreds ? obCreds.openid : '(请先运行 setup-ob)';
 
   console.log('🌊 生成配对二维码\n');
   console.log('正在获取二维码...');
-  const qrResp = await fetchQRCode();
-  const qrcodeUrl = qrResp.qrcode_img_content;
 
-  console.log('\n📱 用手机微信扫描以下二维码，添加 OceanChat Bot：\n');
+  // 发送已有 token 列表，让服务端关联到已有 Bot
+  const existingTokens = loadAllTokens().map(t => t.token);
+  let qrResp;
+  try {
+    qrResp = await fetchQRCodeWithTokens(existingTokens);
+  } catch (_) {
+    qrResp = await fetchQRCode();
+  }
+
+  const qrcodeUrl = qrResp.qrcode_img_content;
+  const qrcode = qrResp.qrcode;
+
+  console.log('\n📱 用手机微信扫描以下二维码：\n');
   console.log(`   ${qrcodeUrl}\n`);
 
   try {
     const qrterm = await import('qrcode-terminal');
     qrterm.default.generate(qrcodeUrl, { small: true });
-  } catch (_) {
-    console.log('   （安装 qrcode-terminal 可在终端直接显示二维码）');
-  }
+  } catch (_) {}
 
-  console.log('扫码添加后，发送以下消息完成配对：\n');
-  // 这里 CC_NAME 和 CC_OPENID 应该由 CC 端填入
-  console.log('   pair <你的CC名字> <你的CC的OpenID>\n');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('Bot OpenID: ' + botOpenId);
-  console.log('Bot 前5位:  ' + botOpenId.slice(0, 5));
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('等待扫码授权...');
+  const deadline = Date.now() + 5 * 60 * 1000;
+  while (Date.now() < deadline) {
+    const statusResp = await pollQRStatus(qrcode);
+    switch (statusResp.status) {
+      case 'confirmed':
+        console.log('\n✅ 新用户已连接！\n');
+        addToken({
+          accountId: statusResp.ilink_bot_id,
+          token: statusResp.bot_token,
+          baseUrl: statusResp.baseurl || ILINK_BASE_URL,
+          userId: statusResp.ilink_user_id,
+        });
+        console.log('   bot_id: ' + statusResp.ilink_bot_id);
+        console.log('   新用户: ' + statusResp.ilink_user_id);
+        console.log('   Token 池: ' + loadAllTokens().length + ' 个\n');
+        console.log('新用户在微信发送以下消息完成配对：');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('pair <CC名字> <CC的OpenID>');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        return;
+      case 'expired':
+        console.log('\n⏰ 二维码过期\n');
+        return;
+      case 'scaned':
+        process.stdout.write('\n📱 已扫码，等待确认...');
+        break;
+      default:
+        break;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  console.log('\n⏰ 等待超时\n');
+}
+
+async function fetchQRCodeWithTokens(tokenList) {
+  const raw = await httpsPost('ilink/bot/get_bot_qrcode?bot_type=3',
+    { local_token_list: tokenList }, ''
+  );
+  return JSON.parse(raw);
 }
 
 // ── 查看状态 ──────────────────────────────────────────────────
