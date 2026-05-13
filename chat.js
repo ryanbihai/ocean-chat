@@ -1580,31 +1580,18 @@ async function cmdWechatUp() {
   console.log('   CC:   ' + ccName);
   console.log('   OpenID: ' + ccOpenId.slice(0, 5) + '...');
   console.log('');
-
-  // 2. QR code for pairing
-  let qrUrl = null;
-  try { qrUrl = await fetchWechatQR(); } catch (_) {}
-
-  if (qrUrl) {
-    console.log('📱 用手机微信扫描二维码：\n');
-    console.log('   ' + qrUrl + '\n');
-    try {
-      const qrterm = await import('qrcode-terminal');
-      qrterm.default.generate(qrUrl, { small: true });
-    } catch (_) {}
-  } else {
-    console.log('⚠️  Bridge 未启动。请让管理员先运行: node wechat-cc-bridge.js start');
-    console.log('   然后用管理员生成的二维码配对。\n');
-  }
-
-  // 3. Pair command
-  console.log('扫码后在微信发送：');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('pair ' + ccName + ' ' + ccOpenId);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('');
-
-  // 4. Wait for user to confirm pairing, then start listener
+  console.log('📱 请让 Bridge 管理员运行以下命令生成配码：');
+  console.log('');
+  console.log('   node wechat-cc-bridge.js pair-qr');
+  console.log('');
+  console.log('   用微信扫码后，在微信发送：');
+  console.log('');
+  console.log('   pair ' + ccName + ' ' + ccOpenId);
+  console.log('');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('');
   console.log('配对完成后按 Enter 启动监听...');
   await new Promise(resolve => {
     process.stdin.resume();
@@ -1685,37 +1672,17 @@ async function cmdWechatPair() {
   console.log('  OpenID: ' + ccOpenId);
   console.log('  前5位:  ' + ccOpenId.slice(0, 5));
   console.log('');
-
-  // Try to generate QR code using Bot credentials
-  const wechatCredFile = path.join(os.homedir(), '.oceanbus-chat', 'wechat-bot.json');
-  let qrUrl = null;
-
-  if (fs.existsSync(wechatCredFile)) {
-    try {
-      // Use dynamic import to call the iLink API directly
-      const qrResp = await fetchWechatQR();
-      qrUrl = qrResp;
-    } catch (e) {
-      // Can't fetch QR — will show manual instructions
-    }
-  }
-
-  if (qrUrl) {
-    console.log('📱 用手机微信扫描以下二维码：\n');
-    console.log('   ' + qrUrl + '\n');
-    try {
-      const qrterm = await import('qrcode-terminal');
-      qrterm.default.generate(qrUrl, { small: true });
-    } catch (_) {}
-  } else {
-    console.log('⚠️  无法获取微信 Bot 二维码。请确保 Bridge 已启动。');
-    console.log('   然后在 CC 所在机器运行: node wechat-cc-bridge.js pair-qr\n');
-  }
-
-  console.log('扫码添加 OceanChat Bot 后，发送以下消息完成配对：\n');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('');
+  console.log('📱 请让 Bridge 管理员运行以下命令生成配码：');
+  console.log('');
+  console.log('   node wechat-cc-bridge.js pair-qr');
+  console.log('');
+  console.log('   用微信扫码后，发送以下消息完成配对：');
+  console.log('');
   console.log('pair ' + ccName + ' ' + ccOpenId);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('');
   console.log('配对完成后，直接在微信给 Bot 发消息，就能操控你的 CC。');
 }
