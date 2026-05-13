@@ -1547,6 +1547,111 @@ async function cmdConnectCC() {
   console.log('   核对一致后，连接建立。之后你就可以对 CC 说"开始监听"。');
 }
 
+// ── wechat-up ───────────────────────────────────────────────────────────────
+
+/** 一键启动：注册身份 → 二维码配对 → 启动监听。朋友只需跑这一条命令。 */
+async function cmdWechatUp() {
+  let creds = loadCredentials();
+
+  // 1. Auto-register
+  if (!creds) {
+    console.warn('[wechat-up] 正在创建 OceanBus 身份...');
+    ensureDir();
+    const ob = await createOceanBus({ keyStore: { type: 'memory' } });
+    try {
+      const reg = await ob.createIdentity();
+      const openid = await ob.getAddress();
+      creds = { agent_id: reg.agent_id, api_key: reg.api_key, openid, source: SKILL_SOURCE, created_at: new Date().toISOString() };
+      fs.writeFileSync(CRED_FILE, JSON.stringify(creds, null, 2));
+    } catch (e) {
+      console.error('注册失败: ' + e.message);
+      await ob.destroy();
+      process.exit(1);
+    }
+    await ob.destroy();
+  }
+
+  const ccName = 'CC-' + path.basename(process.cwd());
+  const ccOpenId = creds.openid;
+
+  console.log('');
+  console.log('🌊 WeChat 一键操控 CC');
+  console.log('');
+  console.log('   CC:   ' + ccName);
+  console.log('   OpenID: ' + ccOpenId.slice(0, 5) + '...');
+  console.log('');
+
+  // 2. QR code for pairing
+  let qrUrl = null;
+  try { qrUrl = await fetchWechatQR(); } catch (_) {}
+
+  if (qrUrl) {
+    console.log('📱 用手机微信扫描二维码：\n');
+    console.log('   ' + qrUrl + '\n');
+    try {
+      const qrterm = await import('qrcode-terminal');
+      qrterm.default.generate(qrUrl, { small: true });
+    } catch (_) {}
+  } else {
+    console.log('⚠️  Bridge 未启动。请让管理员先运行: node wechat-cc-bridge.js start');
+    console.log('   然后用管理员生成的二维码配对。\n');
+  }
+
+  // 3. Pair command
+  console.log('扫码后在微信发送：');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('pair ' + ccName + ' ' + ccOpenId);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('');
+
+  // 4. Wait for user to confirm pairing, then start listener
+  console.log('配对完成后按 Enter 启动监听...');
+  await new Promise(resolve => {
+    process.stdin.resume();
+    process.stdin.once('data', () => {
+      process.stdin.pause();
+      resolve();
+    });
+  });
+
+  console.log('');
+  console.log('🚀 启动实时监听...\n');
+
+  // 5. Start real-time CC listener
+  const ob = await createOceanBus({
+    keyStore: { type: 'memory' },
+    identity: { agent_id: creds.agent_id, api_key: creds.api_key, openid: creds.openid },
+  });
+
+  await migrateContacts();
+  const roster = getRoster();
+
+  ob.startListening(async (msg) => {
+    if (msg.from_openid === creds.openid) return;
+
+    let contact = await roster.findByOpenId(msg.from_openid);
+    if (!contact) {
+      const fromMatch = msg.content.match(/^from (\S+) (\S+)$/m);
+      const autoName = fromMatch ? fromMatch[1].trim() : '微信用户';
+      try {
+        await roster.add({ name: autoName, openIds: [msg.from_openid] });
+        contact = await roster.findByOpenId(msg.from_openid);
+      } catch (_) {}
+    }
+
+    const from = contact ? contact.name : msg.from_openid.slice(0, 12);
+    const body = (msg.content || '').replace(/^from .+\nto .+\n/m, '').trim();
+    const time = new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour12: false });
+
+    if (process.stdout.isTTY) process.stdout.write('\r\x1b[K');
+    console.log('── ' + from + ' · ' + time + ' ──');
+    console.log(body);
+    console.log('');
+  });
+
+  await new Promise(() => {});
+}
+
 // ── wechat-pair ─────────────────────────────────────────────────────────────
 
 /** 生成微信配对的二维码和说明。CC 端运行，用户微信扫码后即可直接操作 CC。 */
@@ -1792,6 +1897,7 @@ async function main() {
     console.log('');
     console.log('命令:');
     console.log('  node chat.js connect-cc                 一键配通：通过小龙虾连接 CC');
+    console.log('  node chat.js wechat-up                  一键启动：注册+扫码+监听（推荐朋友用）');
     console.log('  node chat.js wechat-pair                扫码配对：微信扫码直接操控 CC');
     console.log('  node chat.js setup                      注册 + 获取你的 OpenID');
     console.log('  node chat.js renew-key                  轮换 key（身份不变）');
@@ -1894,6 +2000,9 @@ async function main() {
         break;
       case 'connect-cc':
         await cmdConnectCC();
+        break;
+      case 'wechat-up':
+        await cmdWechatUp();
         break;
       case 'wechat-pair':
         await cmdWechatPair();

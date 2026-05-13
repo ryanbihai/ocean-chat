@@ -275,47 +275,34 @@ async function startBridge() {
     await ob.send(targetOpenId, content);
   };
 
-  let obCursor = 0;
+  // OB 实时监听（WebSocket，替代轮询）
+  ob.startListening(async (msg) => {
+    if (msg.from_openid === botOpenId) return; // skip self
 
-  // OB poll loop（独立异步）
-  (async function obLoop() {
-    while (true) {
+    const fromOpenId = msg.from_openid;
+    const content = msg.content || '';
+
+    // 查找哪个微信用户配对了这个 CC OpenID
+    const pairings = loadPairings();
+    const wxUserId = Object.keys(pairings).find(
+      uid => pairings[uid].ccOpenId === fromOpenId
+    );
+
+    if (wxUserId) {
+      const pairing = pairings[wxUserId];
+      console.log(`[←OB] ${pairing.ccName}: ${content.slice(0, 80)}`);
       try {
-        const msgs = await ob.sync(obCursor);
-        for (const m of msgs) {
-          const fromOpenId = m.from_openid;
-          const content = m.content || '';
-          const seq = typeof m.seq_id === 'number' ? m.seq_id : parseInt(m.seq_id, 10);
-
-          // 查找哪个微信用户配对了这个 CC OpenID
-          const pairings = loadPairings();
-          const wxUserId = Object.keys(pairings).find(
-            uid => pairings[uid].ccOpenId === fromOpenId
-          );
-
-          if (wxUserId) {
-            const pairing = pairings[wxUserId];
-            console.log(`[←OB] ${pairing.ccName}: ${content.slice(0, 80)}`);
-            try {
-              // 剥离路由头
-              const body = content.replace(/^from .+\nto .+\n/m, '').trim();
-              await sendWechatMessage(wxCreds.token, wxUserId,
-                `🔔 ${pairing.ccName} 回复：\n\n${body}`
-              );
-              console.log(`[→微信] → ${wxUserId.slice(0, 12)}...`);
-            } catch (e) {
-              console.error(`[微信发送失败] ${e.message}`);
-            }
-          }
-
-          if (!isNaN(seq) && seq > obCursor) obCursor = seq;
-        }
+        // 剥离路由头
+        const body = content.replace(/^from .+\nto .+\n/m, '').trim();
+        await sendWechatMessage(wxCreds.token, wxUserId,
+          `🔔 ${pairing.ccName} 回复：\n\n${body}`
+        );
+        console.log(`[→微信] → ${wxUserId.slice(0, 12)}...`);
       } catch (e) {
-        // poll error, continue
+        console.error(`[微信发送失败] ${e.message}`);
       }
-      await new Promise(r => setTimeout(r, 2000));
     }
-  })();
+  });
 
   // ── 启动 iLink 长轮询（收微信消息） ─────────────────────────
   let buf = '';
