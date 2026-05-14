@@ -18,7 +18,7 @@ const { sendWeixinMessage, resolveWeixinConfig, printSetupGuide } = require('./s
 //   node chat.js remove <name>                Delete a contact
 //   node chat.js rename <name> <newname>      Rename a contact
 //   node chat.js tag <name> <tags>            Set tags on a contact
-//   node chat.js send <name|openid> <msg>     Send a message (Roster-aware)
+//   node chat.js send <name|openid> <msg>     Send a message (structured JSON, --raw for plain)
 //   node chat.js check                        Check for new messages
 //   node chat.js thread create <name>         Start a conversation thread
 //   node chat.js thread reply <id> <msg>      Reply in a thread
@@ -167,6 +167,55 @@ function loadDateLog() {
 function saveDateLog(log) {
   ensureDir();
   fs.writeFileSync(DATE_LOG_FILE, JSON.stringify(log, null, 2));
+}
+
+// ── Structured Message Protocol ─────────────────────────────────────────────
+// Messages over the wire are wrapped as JSON for rich UX:
+//   {"type":"message","content":"...","meta":{"sender_name":"微信用户"}}
+//   {"type":"status","status":"typing_start"}
+// Plain text (backwards compatible) is treated as type=message, direction=in.
+//
+// Display labels use direction arrows:
+//   ← 微信  = message from WeChat to CC
+//   → 微信  = message from CC to WeChat
+
+function parseInbound(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed.type === 'message') return { structured: true, ...parsed, direction: 'in' };
+    if (parsed.type === 'status') return { structured: true, ...parsed };
+  } catch (_) {}
+  return { structured: false, type: 'message', content: raw, direction: 'in' };
+}
+
+function wrapMessage(content, meta = {}) {
+  return JSON.stringify({ type: 'message', content, meta });
+}
+
+function wrapStatus(status, extra = {}) {
+  return JSON.stringify({ type: 'status', status, ...extra });
+}
+
+function formatLabel(msg) {
+  if (msg.type === 'status') {
+    switch (msg.status) {
+      case 'typing_start':  return '  对方正在输入...';
+      case 'typing_stop':   return null;   // silent — don't display
+      case 'processing':    return '  ⏳ ' + (msg.content || '处理中...');
+      case 'done':          return null;
+      default:              return '  📡 ' + msg.status;
+    }
+  }
+  const dir = msg.direction || 'in';
+  const sender = msg.meta?.sender_name || '';
+  const label = (dir === 'in' ? '← ' : '→ ') + (sender || '微信');
+  if (msg.meta?.media_type) {
+    const mt = msg.meta.media_type;
+    const tag = mt.startsWith('image') ? '图片' : mt.startsWith('video') ? '视频'
+      : mt.startsWith('audio') ? '语音' : '文件';
+    return label + ' [' + tag + ']';
+  }
+  return label;
 }
 
 // ── Subcommands ───────────────────────────────────────────────────────────
@@ -531,7 +580,7 @@ async function cmdTag(name, tags) {
   console.log('已更新标签: ' + c.name + ' → [' + tagList.join(', ') + ']');
 }
 
-async function cmdSend(target, message, fromName) {
+async function cmdSend(target, message, fromName, raw = false) {
   const creds = loadCredentials();
   if (!creds) {
     console.log('尚未注册。运行: node chat.js setup');
@@ -539,7 +588,7 @@ async function cmdSend(target, message, fromName) {
   }
 
   if (!target || !message) {
-    console.log('用法: node chat.js send <名字|OpenID> <消息> [--from <你的名字>]');
+    console.log('用法: node chat.js send <名字|OpenID> <消息> [--from <你的名字>] [--raw]');
     return;
   }
 
@@ -594,11 +643,16 @@ async function cmdSend(target, message, fromName) {
     }
   }
 
-  // Always prepend debug routing headers (from/to + OpenID first 5 chars)
+  // Build message body — structured JSON by default, raw text with --raw
   const senderName = fromName || os.userInfo().username || 'unknown';
-  const senderOpenid5 = creds.openid ? creds.openid.slice(0, 5) : '?????';
-  const targetOpenid5 = openid ? openid.slice(0, 5) : '?????';
-  const body = `from ${senderName} ${senderOpenid5}\nto ${displayName} ${targetOpenid5}\n${message}`;
+  let body;
+  if (raw) {
+    const senderOpenid5 = creds.openid ? creds.openid.slice(0, 5) : '?????';
+    const targetOpenid5 = openid ? openid.slice(0, 5) : '?????';
+    body = `from ${senderName} ${senderOpenid5}\nto ${displayName} ${targetOpenid5}\n${message}`;
+  } else {
+    body = wrapMessage(message, { sender_name: senderName });
+  }
 
   const ob = await createOceanBus({
     keyStore: { type: 'memory' },
@@ -607,7 +661,7 @@ async function cmdSend(target, message, fromName) {
 
   await ob.send(openid, body);
 
-  console.log('已发送 → ' + displayName);
+  console.log((raw ? '' : '→ 微信 · ') + '已发送 → ' + displayName);
   await ob.destroy();
 }
 
@@ -947,11 +1001,11 @@ async function cmdListen(onMessage, autoExec = false, projectDir = null) {
 
         console.log('[auto-exec] 完成 — 回报 ' + label);
         console.log('[auto-exec] 日志: ' + logPath);
-        await ob.send(task.fromOpenid, result);
+        await ob.send(task.fromOpenid, wrapMessage(result, { sender_name: 'CC' }));
       } catch (e) {
         console.error('[auto-exec] 失败: ' + e.message);
         try {
-          await ob.send(task.fromOpenid, `[CC-oceanbus] 任务执行失败: ${e.message}`);
+          await ob.send(task.fromOpenid, wrapMessage(`任务执行失败: ${e.message}`, { sender_name: 'CC' }));
         } catch (_) {}
       }
     }
@@ -1020,23 +1074,45 @@ async function cmdListen(onMessage, autoExec = false, projectDir = null) {
       body = msg.content.slice(headerMatch[0].length);
     }
 
+    // ── Parse structured message (or fall back to plain text + routing headers) ──
+    const inbound = parseInbound(body);
+    const displayContent = inbound.type === 'message' ? (inbound.content || body) : body;
+
+    // Status messages: display only, don't process
+    if (inbound.type === 'status') {
+      const label = formatLabel(inbound);
+      if (label !== null) {
+        if (process.stdout.isTTY) process.stdout.write('\r\x1b[K');
+        console.log(label + ' · ' + time);
+      }
+      return;
+    }
+
     // Handle thread protocol
     const threadResult = threads.handleThreadProtocol(msg, true, contact?.name || null);
 
+    // Display
+    const label = formatLabel(inbound);
     if (process.stdout.isTTY) process.stdout.write('\r\x1b[K');
-    console.log('── ' + from + ' · ' + time + ' ──');
+    console.log(label + ' · ' + time);
     if (threadResult) {
       console.log('  [' + (threadResult.thread_id || '').slice(0, 14) + '...]'
         + (threadResult.subject ? ' ' + threadResult.subject : ''));
     }
-    if (msgFrom && msgTo) {
-      console.log('  ' + msgFrom + ' → ' + msgTo);
-    }
-    if (threadResult && threadResult.displayText) {
-      console.log(threadResult.displayText);
+    if (inbound.structured) {
+      // Structured message — display content directly
+      console.log(displayContent);
     } else {
-      const protocolDisplay = formatProtocolDisplay(body);
-      console.log(protocolDisplay || body);
+      // Legacy plain-text format — strip routing headers for display
+      if (msgFrom && msgTo) {
+        console.log('  ' + msgFrom + ' → ' + msgTo);
+      }
+      if (threadResult && threadResult.displayText) {
+        console.log(threadResult.displayText);
+      } else {
+        const protocolDisplay = formatProtocolDisplay(displayContent);
+        console.log(protocolDisplay || displayContent);
+      }
     }
     console.log('');
 
@@ -1045,14 +1121,14 @@ async function cmdListen(onMessage, autoExec = false, projectDir = null) {
       taskQueue.push({
         fromName: fromName || msgFrom,
         fromOpenid: msg.from_openid,
-        body,
+        body: displayContent,
       });
       console.log('[auto-exec] 任务已入队 (排队: ' + taskQueue.length + ')');
       processQueue();
       return; // auto-exec handles the reply, skip onMessage hooks
     }
 
-    // --on-message hook (use parsed body, not raw content)
+    // --on-message hook (use clean display content, not raw body)
     if (onMessage) {
       if (onMessage === 'task-file') {
         // Built-in: queue task to file — no claude CLI, no escaping issues
@@ -1062,7 +1138,7 @@ async function cmdListen(onMessage, autoExec = false, projectDir = null) {
         queue.push({
           from: msgFrom || fromName || msg.from_openid,
           openid: msg.from_openid,
-          content: body,
+          content: displayContent,
           time: time,
           received: new Date().toISOString(),
           status: 'pending'
@@ -1076,7 +1152,7 @@ async function cmdListen(onMessage, autoExec = false, projectDir = null) {
         const cmd = onMessage
           .replace(/\{from\}/g, escaped(hookFrom))
           .replace(/\{openid\}/g, escaped(msg.from_openid))
-          .replace(/\{content\}/g, escaped(body))
+          .replace(/\{content\}/g, escaped(displayContent))
           .replace(/\{time\}/g, escaped(time));
         exec(cmd, (err, stdout, stderr) => {
           if (err) {
@@ -1131,24 +1207,34 @@ async function cmdMonitor({ intervalMs, noAutoReply, autoExec, projectDir }) {
   // Use SDK's startMonitor — handles polling, cursor, self-skip, error backoff internally
   const stop = ob.startMonitor(async (msg) => {
     const from = msg.from_openid ?? '';
-    const content = msg.content ?? '';
+    const rawContent = msg.content ?? '';
 
     // Resolve sender name from roster
     let contact = await roster.findByOpenId(from);
     const fromName = contact ? contact.name : from.slice(0, 5);
-    const displayText = (content || '').slice(0, 300);
 
-    console.log('── 来自 ' + fromName + ' (' + from.slice(0, 5) + '...) ──');
-    console.log('  ' + (msg.created_at || ''));
-    console.log('');
-    console.log(displayText);
+    // Parse structured message
+    const inbound = parseInbound(rawContent);
+    const displayContent = inbound.type === 'message' ? (inbound.content || rawContent) : rawContent;
+
+    // Status messages: display only, don't process
+    if (inbound.type === 'status') {
+      const statusLabel = formatLabel(inbound);
+      if (statusLabel !== null) {
+        console.log(statusLabel + ' · ' + (msg.created_at || ''));
+      }
+      return;
+    }
+
+    const label = formatLabel(inbound);
+    console.log(label + ' · ' + (msg.created_at || ''));
+    console.log(displayContent.slice(0, 300));
     console.log('');
 
     // Auto-exec (spawn claude)
-    if (autoExec && content.trim()) {
-      const prompt = content;
-      const label = fromName;
-      console.log('[auto-exec] 开始执行: ' + label);
+    if (autoExec && displayContent.trim()) {
+      const prompt = displayContent;
+      console.log('[auto-exec] 开始执行: ' + fromName);
       try {
         const result = await new Promise((resolve, reject) => {
           const child = spawn('claude', ['-p', prompt, '--dangerously-skip-permissions'], {
@@ -1166,11 +1252,11 @@ async function cmdMonitor({ intervalMs, noAutoReply, autoExec, projectDir }) {
           });
           child.on('error', e => { clearTimeout(timer); reject(e); });
         });
-        console.log('[auto-exec] 完成，回报 ' + label);
-        await ob.send(from, result);
+        console.log('[auto-exec] 完成，回报 ' + fromName);
+        await ob.send(from, wrapMessage(result, { sender_name: 'CC' }));
       } catch (e) {
         console.error('[auto-exec] 失败:', e.message);
-        try { await ob.send(from, '任务执行失败: ' + e.message); } catch (_) {}
+        try { await ob.send(from, wrapMessage('任务执行失败: ' + e.message, { sender_name: 'CC' })); } catch (_) {}
       }
     }
   }, {
@@ -1789,10 +1875,9 @@ async function cmdWechatUp() {
             continue;
           }
 
-          // Forward to CC via OB
-          const routeHeader = 'from 微信用户 ' + (wxUid || '?').slice(0, 5) + '\nto ' + pairing.ccName + ' ' + pairing.ccOpenId.slice(0, 5) + '\n';
+          // Forward to CC via OB (structured format)
           try {
-            await obBot.send(pairing.ccOpenId, routeHeader + text);
+            await obBot.send(pairing.ccOpenId, wrapMessage(text, { sender_name: '微信用户' }));
             console.log('[→CC] ' + pairing.ccName);
             await sendWx(wxUid, '已转发给 ' + pairing.ccName + '，等待执行...', msg.context_token);
           } catch (e) {
@@ -1811,7 +1896,9 @@ async function cmdWechatUp() {
   // —— OB listener (receives CC replies, forwards to WeChat) ——
   obBot.startListening(async (msg) => {
     if (msg.from_openid === botOpenId) return;
-    const content = msg.content || '';
+    const rawContent = msg.content || '';
+    const inbound = parseInbound(rawContent);
+    const content = inbound.type === 'message' ? (inbound.content || rawContent) : rawContent;
     const wxUid = Object.keys(pairings).find(uid => pairings[uid].ccOpenId === msg.from_openid);
     if (wxUid) {
       const p = pairings[wxUid];
@@ -1857,11 +1944,25 @@ async function cmdWechatUp() {
       try { await roster.add({ name: '微信用户', openIds: [msg.from_openid] }); contact = await roster.findByOpenId(msg.from_openid); } catch (_) {}
     }
     const from = contact ? contact.name : msg.from_openid.slice(0, 12);
-    const body = (msg.content || '').replace(/^from .+\nto .+\n/m, '').trim();
+    const inbound = parseInbound(msg.content || '');
+    const body = inbound.type === 'message' ? (inbound.content || msg.content || '') : (msg.content || '');
+    // Strip legacy routing headers if present
+    const cleanBody = body.replace(/^from .+\nto .+\n/m, '').trim();
     const time = new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour12: false });
+
+    if (inbound.type === 'status') {
+      const statusLabel = formatLabel(inbound);
+      if (statusLabel !== null) {
+        if (process.stdout.isTTY) process.stdout.write('\r\x1b[K');
+        console.log(statusLabel + ' · ' + time);
+      }
+      return;
+    }
+
+    const label = formatLabel(inbound);
     if (process.stdout.isTTY) process.stdout.write('\r\x1b[K');
-    console.log('── ' + from + ' · ' + time + ' ──');
-    console.log(body);
+    console.log(label + ' · ' + time);
+    console.log(cleanBody);
     console.log('');
   });
 
@@ -2107,9 +2208,9 @@ async function main() {
     console.log('  node chat.js remove <名字>              删除联系人');
     console.log('  node chat.js rename <名字> <新名字>     重命名联系人');
     console.log('  node chat.js tag <名字> <标签1,标签2>   设置联系人标签');
-    console.log('  node chat.js send <名字|OpenID> <消息>  发送消息');
+    console.log('  node chat.js send <名字|OpenID> <消息>  发送消息（默认结构化格式）');
     console.log('    --from <你的名字>                     指定发送者名字（默认用系统用户名）');
-    console.log('    每条消息自动附加: from <名> <OpenID前5> / to <名> <OpenID前5>');
+    console.log('    --raw                                发送纯文本（兼容旧版，不包装 JSON）');
     console.log('  node chat.js check                      查看新消息');
     console.log('  node chat.js listen                     实时监听（消息自动弹出）');
     console.log('  node chat.js listen --auto-exec          自动执行模式（收到消息立即 spawn claude 执行）');
@@ -2183,15 +2284,16 @@ async function main() {
         const fromIdx = args.indexOf('--from');
         if (fromIdx >= 0 && fromIdx + 1 < args.length) {
           fromName = args[fromIdx + 1];
-          // Remove --from and its value from args before building message
           args.splice(fromIdx, 2);
         }
-        const msg = args.slice(2).join(' ');
+        // Parse --raw flag (skip structured wrapping)
+        const raw = args.includes('--raw');
+        const msg = args.slice(2).filter(a => a !== '--raw').join(' ');
         if (!target || !msg) {
-          console.log('用法: node chat.js send <名字|OpenID> <消息> [--from <你的名字>]');
+          console.log('用法: node chat.js send <名字|OpenID> <消息> [--from <你的名字>] [--raw]');
           break;
         }
-        await cmdSend(target, msg, fromName);
+        await cmdSend(target, msg, fromName, raw);
         break;
       }
       case 'check':
